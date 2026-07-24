@@ -105,7 +105,9 @@ laut Doku unterstützt.
 
 Skripte:
 - [`security_doh.py`](./security_doh.py) — reproduziert die Sicherheitsmessung (via DoH).
-- [`dns_speed_test.py`](./dns_speed_test.py) — **lokaler** Geschwindigkeitstest für deinen Standort.
+- [`dns_speed_test.py`](./dns_speed_test.py) — **lokaler** Geschwindigkeitstest; hängt jeden Lauf an `dns_history.jsonl` an.
+- [`dns_analyze.py`](./dns_analyze.py) — wertet den Verlauf aus und kürt den **Sieger** (+ Grafik `dns_trend.html`).
+- [`schedule_windows.ps1`](./schedule_windows.ps1) / [`start_dns_test.bat`](./start_dns_test.bat) — richtet den mehrtägigen Test als Windows-Aufgabe ein.
 
 ---
 
@@ -125,3 +127,56 @@ Ausgabe: sortierte Tabelle (min / median / mittel / p95 / max / Verlustrate) je 
 
 **Worauf achten:** nicht der Bestwert zählt, sondern **Median + p95 + Ausfallrate**. In Mitteleuropa
 liegen Cloudflare/Google/Quad9 dank lokaler Knoten (Frankfurt/Amsterdam/Zürich) meist unter 20 ms.
+
+---
+
+## 🏁 Mehrtägiger Test (Windows-Laptop, 3 Tage stündlich) → Sieger ermitteln
+
+Eine Einzelmessung ist zu verrauscht (Tageszeit, Netzlast schwanken). Besser: **3 Tage lang
+stündlich** messen, alles akkumulieren und den **Sieger nach Geschwindigkeit + Zuverlässigkeit**
+küren. Voraussetzung: **Python 3** installiert (python.org, Haken „Add to PATH").
+
+**1. Einrichten** — Doppelklick auf `start_dns_test.bat` (oder in PowerShell):
+```powershell
+powershell -ExecutionPolicy Bypass -File schedule_windows.ps1
+```
+Das registriert zwei Aufgaben: **stündliche Messung** (3 Tage, laptop-/standby-fest) und eine
+**automatische Auswertung** nach 3 Tagen. Ein erster Lauf startet sofort.
+
+**2. Laufen lassen** — Laptop eingeschaltet und am Strom lassen. Verpasste Stunden (z. B. nach
+Standby) werden dank `StartWhenAvailable` nachgeholt; der Verlauf wächst in `dns_history.jsonl`.
+
+**3. Auswerten** — automatisch nach 3 Tagen, oder jederzeit selbst:
+```powershell
+python dns_analyze.py
+```
+Ergebnis: Konsolen-Rangliste + **🏆 Sieger**, `dns_winner.csv/json` und die Grafik
+**`dns_trend.html`** (Median-Verlauf der Top-5 + Endwertung, im Browser öffnen).
+
+**Wie der Sieger bestimmt wird** (kleiner = besser):
+```
+score = Median_der_Lauf-Mediane + 0.3·(p95 − Median) + 0.5·Streuung + 5·Ausfallrate%
+```
+Also der **schnellste _stabile_** Anbieter — Ausreißer, Schwankung über die Tage und Ausfälle
+zählen negativ. Bei Quasi-Gleichstand entscheidet die Zuverlässigkeit (statistisches Unentschieden
+wird ausgewiesen).
+
+**Stoppen / entfernen:**
+```powershell
+Unregister-ScheduledTask -TaskName DNS-Speedtest -Confirm:$false
+Unregister-ScheduledTask -TaskName "DNS-Speedtest-Auswertung" -Confirm:$false
+```
+
+### Troubleshooting (vorausschauend abgesichert)
+
+| Symptom | Ursache & Lösung |
+|---|---|
+| Doppelklick öffnet den Microsoft Store | `python` ist nur der Store-Platzhalter. Python von python.org installieren; das Skript nutzt bevorzugt den `py -3`-Launcher. |
+| SmartScreen/Defender-Warnung bei `.bat`/`.ps1` | „Weitere Informationen" → „Trotzdem ausführen". Die Skripte sind lesbar und lokal. |
+| Aufgabe läuft nachts nicht | Standby. `WakeToRun` + `StartWhenAvailable` sind gesetzt; optional `powercfg /change standby-timeout-ac 0` (Admin), damit der Laptop am Strom nicht schläft. |
+| Alle Anbieter ~gleich schnell + Hijack-Warnung | Router/ISP kapert DNS. Analyse kürt dann **keinen** Sieger. DNS-Umleitung/Filter im Router deaktivieren und neu messen. |
+| „Kein UDP/53-Egress" in `dns_runs.log` | Firewall blockt Port 53. Ausgehendes UDP/53 erlauben. |
+| Wenige Datenpunkte / „vorläufig" | Laptop war oft aus. Länger laufen lassen (≥ 10 Läufe für ein belastbares Ergebnis). |
+
+Diagnose-Log: `dns_runs.log` (ein Eintrag je Lauf, unabhängig von der Aufgabenplanung-Historie).
+

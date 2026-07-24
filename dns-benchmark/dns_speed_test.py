@@ -13,15 +13,25 @@ Was das Tool macht:
     * misst pro Resolver echte Query-Zeiten (UDP/53) ueber viele Iterationen
     * nutzt eine Mischung populaerer + deutschsprachiger Domains
     * erkennt, ob dein Netz/Router DNS-Anfragen umleitet ("DNS-Hijacking")
-    * gibt eine sortierte Tabelle (min / median / mittel / p95 / max / Verlust)
-      sowie CSV + JSON aus
+    * gibt eine sortierte Tabelle (min / median / mittel / p95 / max / Verlust) aus
+    * haengt jedes Ergebnis an eine Verlaufsdatei (JSON Lines) an  ->  fuer den
+      mehrtaegigen Test, den dns_analyze.py spaeter auswertet
 
 Voraussetzungen: nur Python 3 (Standardbibliothek) — keine Installation noetig.
 Aufruf:
     python3 dns_speed_test.py
-    python3 dns_speed_test.py --rounds 15 --extra 1.2.3.4=MeinRouter
+    python3 dns_speed_test.py --rounds 15 --extra 192.168.1.1=Router
+    python3 dns_speed_test.py --rounds 6 --quiet          # fuer geplante Laeufe
+
+Alle Ausgaben (Verlauf, CSV/JSON, Log) landen NEBEN diesem Skript — unabhaengig
+vom Arbeitsverzeichnis (wichtig, weil die Windows-Aufgabenplanung in System32 startet).
 """
-import argparse, csv, json, random, socket, statistics, struct, sys, time
+import argparse, csv, json, os, random, re, socket, statistics, struct, subprocess, sys, time, traceback
+
+# Alle Pfade absolut, relativ zum Skript (NICHT zum Arbeitsverzeichnis!)
+SCRIPT_DIR      = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_HISTORY = os.path.join(SCRIPT_DIR, "dns_history.jsonl")
+RUN_LOG         = os.path.join(SCRIPT_DIR, "dns_runs.log")
 
 # ---------------------------------------------------------------------------
 # Zu testende Resolver:  IP -> (Anzeigename, Kategorie)
@@ -53,6 +63,14 @@ DOMAINS = [
     "bild.de", "gmx.net", "web.de", "t-online.de", "ard.de",
 ]
 
+def log_run(msg):
+    """Diagnose-Zeile in dns_runs.log — unabhaengig von der Aufgabenplanung-Historie."""
+    try:
+        with open(RUN_LOG, "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "  " + msg + "\n")
+    except Exception:
+        pass
+
 def build_query(qname, qid, rd=True):
     """Minimales DNS-A-Query-Paket (RFC 1035) — reine Standardbibliothek."""
     header = struct.pack(">HHHHHH", qid, 0x0100 if rd else 0, 1, 0, 0, 0)
@@ -68,18 +86,19 @@ def query_once(server, qname, timeout=2.0):
         pkt = build_query(qname, qid)
         t0 = time.perf_counter()
         s.sendto(pkt, (server, 53))
-        while True:                       # passe Antwort-ID abwarten
-            data, _ = s.recvfrom(4096)
+        for _ in range(8):                # Obergrenze: kein Endlos-Spin bei Fremd-Paketen
+            data, _addr = s.recvfrom(4096)
             if len(data) >= 4 and struct.unpack(">H", data[:2])[0] == qid:
                 return (time.perf_counter() - t0) * 1000.0
+        return None
     except Exception:
         return None
     finally:
         s.close()
 
 def detect_system_resolver():
-    """Aktuellen Resolver ermitteln (Linux/macOS via /etc/resolv.conf)."""
-    try:
+    """Aktuellen Resolver ermitteln — Linux/macOS via resolv.conf, Windows via ipconfig."""
+    try:  # Linux / macOS
         with open("/etc/resolv.conf") as f:
             for line in f:
                 line = line.strip()
@@ -87,6 +106,20 @@ def detect_system_resolver():
                     return line.split()[1]
     except Exception:
         pass
+    if os.name == "nt":  # Windows: erste IPv4 auf/nach einer "DNS"-Zeile in `ipconfig /all`
+        try:
+            out = subprocess.run(["ipconfig", "/all"], capture_output=True,
+                                 text=True, timeout=10).stdout
+            ip_re = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})")
+            lines = out.splitlines()
+            for i, line in enumerate(lines):
+                if "DNS" in line and ":" in line:
+                    for cont in lines[i:i + 5]:      # Label-Zeile + evtl. Folgezeilen
+                        m = ip_re.search(cont)
+                        if m and not m.group(1).startswith(("0.", "255.")):
+                            return m.group(1)
+        except Exception:
+            pass
     return None
 
 def check_hijacking():
@@ -100,6 +133,13 @@ def check_hijacking():
             return True
     return False
 
+def connectivity_ok():
+    """Grober Egress-Check: antwortet mind. ein grosser Resolver auf UDP/53?"""
+    for ip in ("8.8.8.8", "1.1.1.1", "9.9.9.9"):
+        if query_once(ip, "example.com", timeout=2.0) is not None:
+            return True
+    return False
+
 def pctl(sorted_vals, p):
     if not sorted_vals: return None
     k = min(len(sorted_vals) - 1, int(round(p * (len(sorted_vals) - 1))))
@@ -110,13 +150,35 @@ def bar(value, vmax, width=22):
     n = int(round(width * value / vmax))
     return "#" * max(0, min(width, n))
 
+def append_history(path, record):
+    """Eine JSON-Lines-Zeile atomar anhaengen (ein write inkl. \\n)."""
+    try:
+        line = json.dumps(record, ensure_ascii=False)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        return True
+    except Exception as e:
+        log_run("WARN history: " + repr(e))
+        return False
+
 def main():
     ap = argparse.ArgumentParser(description="Lokaler DNS-Geschwindigkeitstest")
     ap.add_argument("--rounds", type=int, default=12, help="Messrunden je Domain (Standard 12)")
     ap.add_argument("--timeout", type=float, default=2.0, help="Timeout pro Query in s")
     ap.add_argument("--extra", action="append", default=[],
                     help="Zusaetzlicher Resolver  IP=Name  (mehrfach moeglich)")
+    ap.add_argument("--history", default=None,
+                    help="Verlaufsdatei (JSON Lines). Standard: dns_history.jsonl neben dem Skript.")
+    ap.add_argument("--no-history", action="store_true", help="Nicht an die Verlaufsdatei anhaengen.")
+    ap.add_argument("--quiet", action="store_true", help="Weniger Ausgabe (fuer geplante Laeufe).")
     args = ap.parse_args()
+
+    history_path = None if args.no_history else \
+        (os.path.abspath(args.history) if args.history else DEFAULT_HISTORY)
+
+    def out(*a, **k):
+        if not args.quiet:
+            print(*a, **k)
 
     resolvers = list(RESOLVERS)
     sysr = detect_system_resolver()
@@ -124,33 +186,48 @@ def main():
         resolvers.insert(0, (sysr, "Dein aktueller Resolver", "aktuell"))
     for ex in args.extra:
         if "=" in ex:
-            ip, name = ex.split("=", 1); resolvers.append((ip, name, "custom"))
+            ip, name = ex.split("=", 1)
+            resolvers.append((ip.strip(), name.strip(), "custom"))
 
-    print("=" * 78)
-    print(" Lokaler DNS-Geschwindigkeitstest".center(78))
-    print("=" * 78)
-    print(f" Resolver: {len(resolvers)}   Domains: {len(DOMAINS)}   Runden: {args.rounds}"
-          f"   Queries gesamt: {len(resolvers)*len(DOMAINS)*args.rounds}")
-    if sysr: print(f" Dein aktueller Resolver (System): {sysr}")
+    out("=" * 78)
+    out(" Lokaler DNS-Geschwindigkeitstest".center(78))
+    out("=" * 78)
+    out(f" Resolver: {len(resolvers)}   Domains: {len(DOMAINS)}   Runden: {args.rounds}"
+        f"   Queries gesamt: {len(resolvers) * len(DOMAINS) * args.rounds}")
+    if sysr:
+        out(f" Dein aktueller Resolver (System): {sysr}")
 
-    if check_hijacking():
-        print("\n  !!! WARNUNG: Dein Netzwerk/Router leitet DNS-Anfragen um "
-              "(DNS-Hijacking).")
-        print("      Die Ergebnisse messen dann NICHT die echten Anbieter. "
-              "Deaktiviere\n      DNS-Umleitung/Filter im Router oder teste per "
-              "DoH/DoT-faehigem Client.\n")
+    now_meta = {"ts_iso": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "hour": int(time.strftime("%H")), "weekday": time.strftime("%a")}
+
+    # --- Egress-Check: ohne UDP/53 hat der Lauf keinen Sinn ---
+    if not connectivity_ok():
+        msg = "Kein UDP/53-Egress zu oeffentlichen Resolvern (Firewall?) — Lauf uebersprungen."
+        out("\n  !!! " + msg)
+        log_run("ABBRUCH: " + msg)
+        if history_path:
+            append_history(history_path, {**now_meta, "hijacked": None, "rounds": args.rounds,
+                                          "ok": False, "error": "no_udp53_egress",
+                                          "system_resolver": sysr, "per_resolver": []})
+        return
+
+    hij = check_hijacking()
+    if hij:
+        out("\n  !!! WARNUNG: Dein Netzwerk/Router leitet DNS-Anfragen um (DNS-Hijacking).")
+        out("      Die Ergebnisse messen dann NICHT die echten Anbieter. Deaktiviere die")
+        out("      DNS-Umleitung/Filter im Router oder teste per DoH/DoT-faehigem Client.\n")
     else:
-        print(" Kein DNS-Hijacking erkannt — Messung erreicht die echten Anbieter.\n")
+        out(" Kein DNS-Hijacking erkannt — Messung erreicht die echten Anbieter.\n")
 
     # Warmup (Cache + Netzpfad anwaermen)
-    print(" Warmup ...", flush=True)
+    out(" Warmup ...")
     for ip, *_ in resolvers:
         for d in DOMAINS:
             query_once(ip, d, args.timeout)
 
-    timings = {ip: [] for ip, *_ in resolvers}
-    fails   = {ip: 0  for ip, *_ in resolvers}
-    attempts= {ip: 0  for ip, *_ in resolvers}
+    timings  = {ip: [] for ip, *_ in resolvers}
+    fails    = {ip: 0  for ip, *_ in resolvers}
+    attempts = {ip: 0  for ip, *_ in resolvers}
     for rnd in range(args.rounds):
         order = resolvers[rnd % len(resolvers):] + resolvers[:rnd % len(resolvers)]
         for d in DOMAINS:
@@ -159,7 +236,7 @@ def main():
                 t = query_once(ip, d, args.timeout)
                 if t is None: fails[ip] += 1
                 else: timings[ip].append(t)
-        print(f"  Runde {rnd+1}/{args.rounds} fertig", flush=True)
+        out(f"  Runde {rnd + 1}/{args.rounds} fertig")
 
     rows = []
     for ip, name, cat in resolvers:
@@ -176,30 +253,46 @@ def main():
             "stdev_ms":  round(statistics.pstdev(ts), 2) if n > 1 else 0.0,
         })
     ranked = sorted(rows, key=lambda r: (r["median_ms"] is None, r["median_ms"] or 9e9))
-    vmax = max((r["median_ms"] or 0) for r in ranked) or 1
 
-    print("\n" + "=" * 108)
-    print(f'{"#":>2}  {"Anbieter":24}{"IP":17}{"min":>7}{"median":>8}{"mittel":>8}'
-          f'{"p95":>8}{"max":>8}{"Verl%":>7}  Median')
-    print("-" * 108)
-    for i, r in enumerate(ranked, 1):
-        if r["median_ms"] is None:
-            print(f'{i:>2}  {r["name"]:24}{r["ip"]:17}{"—":>7}{"AUSFALL":>8}')
-            continue
-        print(f'{i:>2}  {r["name"]:24}{r["ip"]:17}'
-              f'{r["min_ms"]:7.1f}{r["median_ms"]:8.1f}{r["mean_ms"]:8.1f}'
-              f'{r["p95_ms"]:8.1f}{r["max_ms"]:8.1f}{r["loss_pct"]:7.1f}  '
-              f'{bar(r["median_ms"], vmax)}')
-    print("=" * 108)
-    print(" Alle Zeiten in Millisekunden (kleiner = besser). Sortiert nach Median.")
+    if not args.quiet:
+        vmax = max((r["median_ms"] or 0) for r in ranked) or 1
+        print("\n" + "=" * 108)
+        print(f'{"#":>2}  {"Anbieter":24}{"IP":17}{"min":>7}{"median":>8}{"mittel":>8}'
+              f'{"p95":>8}{"max":>8}{"Verl%":>7}  Median')
+        print("-" * 108)
+        for i, r in enumerate(ranked, 1):
+            if r["median_ms"] is None:
+                print(f'{i:>2}  {r["name"]:24}{r["ip"]:17}{"—":>7}{"AUSFALL":>8}')
+                continue
+            print(f'{i:>2}  {r["name"]:24}{r["ip"]:17}'
+                  f'{r["min_ms"]:7.1f}{r["median_ms"]:8.1f}{r["mean_ms"]:8.1f}'
+                  f'{r["p95_ms"]:8.1f}{r["max_ms"]:8.1f}{r["loss_pct"]:7.1f}  '
+                  f'{bar(r["median_ms"], vmax)}')
+        print("=" * 108)
+        print(" Alle Zeiten in Millisekunden (kleiner = besser). Sortiert nach Median.")
 
-    with open("dns_speed_results.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(ranked)
-    with open("dns_speed_results.json", "w") as f:
-        json.dump({"generated": time.strftime("%Y-%m-%d %H:%M:%S"),
-                   "system_resolver": sysr, "rounds": args.rounds,
-                   "domains": DOMAINS, "results": ranked}, f, indent=2)
-    print(" Gespeichert: dns_speed_results.csv  /  dns_speed_results.json")
+    # Einzelausgabe (Momentaufnahme) — im Skriptordner
+    try:
+        with open(os.path.join(SCRIPT_DIR, "dns_speed_results.csv"), "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(ranked)
+        with open(os.path.join(SCRIPT_DIR, "dns_speed_results.json"), "w", encoding="utf-8") as f:
+            json.dump({"generated": now_meta["ts_iso"], "system_resolver": sysr,
+                       "rounds": args.rounds, "hijacked": hij, "domains": DOMAINS,
+                       "results": ranked}, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        log_run("WARN Einzelausgabe: " + repr(e))
+
+    # Verlauf anhaengen (fuer den mehrtaegigen Test)
+    if history_path:
+        record = {**now_meta, "hijacked": hij, "rounds": args.rounds,
+                  "ok": any(r["samples"] > 0 for r in rows), "system_resolver": sysr,
+                  "per_resolver": [{k: r[k] for k in
+                        ("ip", "name", "samples", "loss_pct", "min_ms",
+                         "median_ms", "mean_ms", "p95_ms", "max_ms", "stdev_ms")} for r in rows]}
+        if append_history(history_path, record):
+            out(f"\n Verlauf angehaengt: {history_path}")
+        log_run(f"OK rounds={args.rounds} hijacked={hij} resolvers={len(resolvers)} "
+                f"-> {os.path.basename(history_path)}")
 
 if __name__ == "__main__":
     try:
@@ -207,3 +300,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nAbgebrochen.")
         sys.exit(1)
+    except Exception:
+        log_run("FEHLER: " + traceback.format_exc().replace("\n", " | "))
+        raise
