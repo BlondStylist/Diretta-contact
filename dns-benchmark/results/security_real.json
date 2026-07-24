@@ -1,0 +1,441 @@
+{
+  "vantage": "DoH from GCP Columbus/Ohio -> reale Provider (standortunabhaengige Merkmale)",
+  "providers": {
+    "Cloudflare": {
+      "ip": "1.1.1.1",
+      "category": "Speed/Privacy",
+      "doh_url": "https://cloudflare-dns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "Cloudflare Malware": {
+      "ip": "1.1.1.2",
+      "category": "Filter: Malware",
+      "doh_url": "https://security.cloudflare-dns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "Cloudflare Family": {
+      "ip": "1.1.1.3",
+      "category": "Filter: Malware+Adult",
+      "doh_url": "https://family.cloudflare-dns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "blocked",
+      "_adult_raw": [
+        true,
+        true
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "Google": {
+      "ip": "8.8.8.8",
+      "category": "Speed",
+      "doh_url": "https://dns.google/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "Quad9 (secured)": {
+      "ip": "9.9.9.9",
+      "category": "Filter: Malware",
+      "doh_url": "https://dns.quad9.net/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "blocked",
+      "_malware_raw": [
+        true,
+        true,
+        true
+      ],
+      "control_resolves": true
+    },
+    "Quad9 Unsecured": {
+      "ip": "9.9.9.10",
+      "category": "Kein Filter",
+      "doh_url": "https://dns10.quad9.net/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "OpenDNS Home": {
+      "ip": "208.67.222.222",
+      "category": "Filter: Security",
+      "doh_url": "https://doh.opendns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        true,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "OpenDNS FamilyShield": {
+      "ip": "208.67.222.123",
+      "category": "Filter: Adult+Sec",
+      "doh_url": "https://doh.familyshield.opendns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "blocked",
+      "_adult_raw": [
+        true,
+        true
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        true,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "AdGuard": {
+      "ip": "94.140.14.14",
+      "category": "Filter: Ads+Tracker",
+      "doh_url": "https://dns.adguard-dns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "partial",
+      "_ads_raw": [
+        true,
+        false,
+        true
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "AdGuard Family": {
+      "ip": "94.140.14.15",
+      "category": "Filter: Ads+Adult",
+      "doh_url": "https://family.adguard-dns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "partial",
+      "_ads_raw": [
+        true,
+        false,
+        true
+      ],
+      "adult": "blocked",
+      "_adult_raw": [
+        true,
+        true
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "AdGuard Unfiltered": {
+      "ip": "94.140.14.140",
+      "category": "Kein Filter",
+      "doh_url": "https://unfiltered.adguard-dns.com/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "CleanBrowsing Security": {
+      "ip": "185.228.168.9",
+      "category": "Filter: Security",
+      "doh_url": "https://doh.cleanbrowsing.org/doh/security-filter/",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "blocked",
+      "_malware_raw": [
+        true,
+        true,
+        true
+      ],
+      "control_resolves": true
+    },
+    "CleanBrowsing Family": {
+      "ip": "185.228.168.168",
+      "category": "Filter: Adult+Sec",
+      "doh_url": "https://doh.cleanbrowsing.org/doh/family-filter/",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "blocked",
+      "_adult_raw": [
+        true,
+        true
+      ],
+      "malware": "blocked",
+      "_malware_raw": [
+        true,
+        true,
+        true
+      ],
+      "control_resolves": true
+    },
+    "Mullvad": {
+      "ip": "194.242.2.2",
+      "category": "Privacy",
+      "doh_url": "https://dns.mullvad.net/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "allowed",
+      "_ads_raw": [
+        false,
+        false,
+        false
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    },
+    "Mullvad AdBlock": {
+      "ip": "194.242.2.3",
+      "category": "Privacy+Ads",
+      "doh_url": "https://adblock.dns.mullvad.net/dns-query",
+      "doh_reachable": true,
+      "doh_http_code": "200",
+      "dnssec_validates": true,
+      "dnssec_rcode": "SERVFAIL",
+      "ad_flag": true,
+      "nxdomain_ok": true,
+      "ads": "blocked",
+      "_ads_raw": [
+        true,
+        true,
+        true
+      ],
+      "adult": "allowed",
+      "_adult_raw": [
+        false,
+        false
+      ],
+      "malware": "partial",
+      "_malware_raw": [
+        false,
+        false,
+        true
+      ],
+      "control_resolves": true
+    }
+  },
+  "duration_s": 57.1
+}

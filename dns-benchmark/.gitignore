@@ -1,0 +1,10 @@
+# Lokal erzeugte Laufzeit-Artefakte des Mehrtagestests — nicht versionieren.
+__pycache__/
+*.pyc
+dns_history.jsonl
+dns_runs.log
+dns_speed_results.csv
+dns_speed_results.json
+dns_winner.csv
+dns_winner.json
+dns_trend.html
