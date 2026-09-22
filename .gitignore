@@ -1,0 +1,6 @@
+# Firecrawl
+.firecrawl/
+
+# Secrets / local env
+.env
+.env.local
