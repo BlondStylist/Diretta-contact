@@ -7,6 +7,9 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
+# Run in the background so the session does not wait for the install.
+echo '{"async": true, "asyncTimeout": 300000}'
+
 SKILL_DIR="${HOME}/.claude/skills/firecrawl"
 
 if [ -d "$SKILL_DIR" ]; then
