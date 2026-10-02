@@ -1,0 +1,568 @@
+<title>DNS-Anbieter zuhause — Sicherheit & Geschwindigkeit im Test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* ============================ Design-Tokens ============================ */
+:root{
+  --bg:#F4F7FA; --surface:#FFFFFF; --surface-2:#EAEFF5; --surface-3:#E1E8F1;
+  --ink:#101923; --ink-2:#46586C; --ink-3:#6B7C90; --line:#D6DEE8;
+  --accent:#1364D2; --accent-2:#0E4FA8; --on-accent:#FFFFFF;
+  --ok:#137a52; --ok-bg:#dcf1e6; --ok-line:#9bd3b6;
+  --warn:#9a5b00; --warn-bg:#f8ebd2; --warn-line:#e2bd7a;
+  --off:#6B7C90; --off-bg:#eef2f7;
+  --shadow:0 1px 2px rgba(16,25,35,.06),0 8px 24px -12px rgba(16,25,35,.18);
+  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0B111A; --surface:#111B26; --surface-2:#17232F; --surface-3:#1F2E3C;
+    --ink:#E7EEF6; --ink-2:#A2B4C6; --ink-3:#73879B; --line:#243342;
+    --accent:#4F9BFF; --accent-2:#7FB6FF; --on-accent:#08111C;
+    --ok:#3fce90; --ok-bg:#12271e; --ok-line:#1f5b41;
+    --warn:#e6ac57; --warn-bg:#2a2113; --warn-line:#63491f;
+    --off:#73879B; --off-bg:#16212c;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F4F7FA; --surface:#FFFFFF; --surface-2:#EAEFF5; --surface-3:#E1E8F1;
+  --ink:#101923; --ink-2:#46586C; --ink-3:#6B7C90; --line:#D6DEE8;
+  --accent:#1364D2; --accent-2:#0E4FA8; --on-accent:#FFFFFF;
+  --ok:#137a52; --ok-bg:#dcf1e6; --ok-line:#9bd3b6;
+  --warn:#9a5b00; --warn-bg:#f8ebd2; --warn-line:#e2bd7a;
+  --off:#6B7C90; --off-bg:#eef2f7;
+}
+:root[data-theme="dark"]{
+  --bg:#0B111A; --surface:#111B26; --surface-2:#17232F; --surface-3:#1F2E3C;
+  --ink:#E7EEF6; --ink-2:#A2B4C6; --ink-3:#73879B; --line:#243342;
+  --accent:#4F9BFF; --accent-2:#7FB6FF; --on-accent:#08111C;
+  --ok:#3fce90; --ok-bg:#12271e; --ok-line:#1f5b41;
+  --warn:#e6ac57; --warn-bg:#2a2113; --warn-line:#63491f;
+  --off:#73879B; --off-bg:#16212c;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  line-height:1.6;font-size:16px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px)}
+h1,h2,h3{line-height:1.15;text-wrap:balance;margin:0}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);font-weight:600}
+.muted{color:var(--ink-2)}
+section{margin-top:clamp(34px,6vw,64px)}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.sec-head h2{font-size:clamp(20px,3vw,27px);letter-spacing:-.01em}
+.sec-num{font-family:var(--mono);font-size:13px;color:var(--ink-3);
+  border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+
+/* ============================ Hero ============================ */
+.hero{margin-top:8px}
+.hero h1{font-size:clamp(28px,5.2vw,48px);letter-spacing:-.02em;margin:14px 0 0}
+.hero .lede{font-size:clamp(16px,2.2vw,19px);color:var(--ink-2);max-width:64ch;margin:16px 0 0}
+.grid-verdict{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin-top:30px}
+@media(max-width:760px){.grid-verdict{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:22px 22px;box-shadow:var(--shadow)}
+.verdict{border-left:4px solid var(--accent)}
+.verdict h3{font-size:15px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;
+  color:var(--ink-3);font-weight:600;margin-bottom:14px}
+.pick{display:flex;align-items:center;gap:12px;margin:10px 0}
+.pick .ip{font-family:var(--mono);font-weight:700;font-size:19px;color:var(--ink);
+  background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:4px 10px;cursor:pointer}
+.pick .ip:hover{border-color:var(--accent)}
+.pick .who{font-weight:650}
+.pick .tag{margin-left:auto;font-size:12.5px;font-family:var(--mono);color:var(--ink-2)}
+.caveat{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:14px;
+  padding:18px 20px}
+.caveat h3{font-size:14.5px;color:var(--warn);display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.caveat p{margin:8px 0 0;font-size:14px;color:var(--ink-2)}
+.caveat .mono{color:var(--ink)}
+
+/* ============================ Methodik-Strip ============================ */
+.method{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:12px;overflow:hidden}
+@media(max-width:720px){.method{grid-template-columns:repeat(2,1fr)}}
+.method .cell{background:var(--surface);padding:16px 16px}
+.method .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.method .v{font-size:15px;font-weight:650;margin-top:6px}
+.method .s{font-size:12.5px;color:var(--ink-2);margin-top:2px}
+
+/* ============================ Matrix / Heatmap ============================ */
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 14px;font-size:13px;color:var(--ink-2)}
+.legend .it{display:inline-flex;align-items:center;gap:7px}
+.chip{width:22px;height:16px;border-radius:5px;border:1px solid var(--line);display:inline-flex;
+  align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);font-weight:700}
+.chip.ok{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)}
+.chip.off{background:var(--off-bg);color:var(--off)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface);
+  box-shadow:var(--shadow)}
+table.matrix{border-collapse:separate;border-spacing:0;width:100%;min-width:920px;font-size:13.5px}
+table.matrix th,table.matrix td{padding:11px 10px;text-align:center;border-bottom:1px solid var(--line)}
+table.matrix thead th{position:sticky;top:0;background:var(--surface-2);z-index:2;
+  font-family:var(--mono);font-size:11px;letter-spacing:.03em;text-transform:uppercase;
+  color:var(--ink-2);font-weight:650;vertical-align:bottom;line-height:1.3}
+table.matrix tbody tr:hover td{background:var(--surface-2)}
+.provcol{text-align:left!important;position:sticky;left:0;background:var(--surface);z-index:1;
+  min-width:190px;box-shadow:1px 0 0 var(--line)}
+table.matrix tbody tr:hover .provcol{background:var(--surface-2)}
+.provname{font-weight:680;font-size:14px;letter-spacing:-.01em}
+.provip{font-family:var(--mono);font-size:12px;color:var(--ink-2);cursor:pointer}
+.provip:hover{color:var(--accent)}
+.provcat{font-size:11.5px;color:var(--ink-3)}
+.cell-ok{background:var(--ok-bg)}
+.cell-warn{background:var(--warn-bg)}
+.mark{font-family:var(--mono);font-weight:700;font-size:14px}
+.mark.ok{color:var(--ok)} .mark.warn{color:var(--warn)} .mark.off{color:var(--off)}
+.pips{font-size:12px;letter-spacing:1px;margin-top:1px}
+.pips .on{color:var(--ok)} .pips .off{color:var(--off)}
+.juris{font-size:12px;color:var(--ink-2);text-align:left!important;white-space:nowrap}
+.flag{font-size:13px}
+.ftn{font-size:12.5px;color:var(--ink-2);margin-top:12px}
+.ftn sup{color:var(--accent);font-weight:700}
+
+/* ============================ Coverage-Balken ============================ */
+.bars{display:grid;gap:12px;margin-top:6px}
+.bar-row{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:center}
+@media(max-width:620px){.bar-row{grid-template-columns:130px 1fr}}
+.bar-lab{font-size:13.5px;font-weight:620}
+.bar-lab small{display:block;font-family:var(--mono);font-size:11px;color:var(--ink-2);font-weight:400}
+.bar-track{position:relative;height:26px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:7px;overflow:hidden}
+.bar-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px 4px 4px 6px;
+  display:flex;align-items:center;padding-left:9px;color:var(--on-accent);font-family:var(--mono);
+  font-size:12px;font-weight:700}
+.bar-fill.ads{background:linear-gradient(90deg,var(--accent-2),var(--accent))}
+.bar-fill.mal{background:linear-gradient(90deg,#0f6b48,var(--ok))}
+.bar-empty{display:flex;align-items:center;height:100%;padding-left:9px;color:var(--ink-3);
+  font-family:var(--mono);font-size:12px}
+
+/* ============================ Entscheidungshilfe ============================ */
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media(max-width:720px){.cards{grid-template-columns:1fr}}
+.uc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px}
+.uc .goal{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.uc .rec{font-size:19px;font-weight:720;letter-spacing:-.01em;margin-top:2px}
+.uc .ips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.uc .ips code{font-family:var(--mono);font-size:13px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:7px;padding:3px 9px;cursor:pointer}
+.uc .ips code:hover{border-color:var(--accent)}
+.uc .why{font-size:13.5px;color:var(--ink-2);margin-top:6px}
+.uc.primary{border-color:var(--accent);border-width:1.5px}
+.uc .badge{align-self:flex-start;font-size:11px;font-family:var(--mono);font-weight:700;
+  color:var(--on-accent);background:var(--accent);border-radius:20px;padding:2px 10px;letter-spacing:.04em}
+
+/* ============================ Speed / Tool ============================ */
+.tool{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+.tool .bar-top{display:flex;align-items:center;gap:8px;padding:11px 16px;background:var(--surface-2);
+  border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.dot{width:11px;height:11px;border-radius:50%}
+.dot.r{background:#e0655b}.dot.y{background:#e0b04b}.dot.g{background:#54b581}
+.tool pre{margin:0;padding:18px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;
+  line-height:1.7;color:var(--ink)}
+.tool pre .c{color:var(--ink-3)}
+.tool pre .p{color:var(--accent-2)}
+.expect{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+@media(max-width:620px){.expect{grid-template-columns:1fr}}
+.expect .e{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:15px}
+.expect .e h4{margin:0 0 6px;font-size:14px}
+.expect .e p{margin:0;font-size:13.5px;color:var(--ink-2)}
+
+/* ============================ Footer ============================ */
+footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);
+  font-size:13px;color:var(--ink-3);display:flex;flex-wrap:wrap;gap:8px 22px}
+footer .mono{color:var(--ink-2)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:13px;padding:9px 16px;
+  border-radius:10px;opacity:0;transition:.22s;pointer-events:none;z-index:50}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <!-- ===================== HERO ===================== -->
+  <header class="hero">
+    <div class="eyebrow">DNS-Analyse · aktiv gemessen · 24.07.2026</div>
+    <h1>Welcher DNS-Anbieter ist bei dir zuhause die beste Wahl?</h1>
+    <p class="lede">Aktiver Test von 15 öffentlichen DNS-Resolvern auf <strong>Sicherheit</strong>
+      (DNSSEC, Malware-, Werbe- &amp; Jugendschutz-Filter, kein NXDOMAIN-Hijacking) und
+      <strong>Geschwindigkeit</strong>. Die Sicherheitswerte sind real gemessen und gelten
+      überall gleich. Die Geschwindigkeit hängt an <em>deinem</em> Anschluss — dafür gibt es
+      unten ein fertiges Mess-Tool.</p>
+
+    <div class="grid-verdict">
+      <div class="card verdict">
+        <h3>Empfehlung für zuhause</h3>
+        <div class="pick">
+          <span class="ip" data-copy="9.9.9.9">9.9.9.9</span>
+          <span class="who">Quad9</span>
+          <span class="tag">max. Sicherheit · EU-Datenschutz</span>
+        </div>
+        <div class="pick">
+          <span class="ip" data-copy="1.1.1.2">1.1.1.2</span>
+          <span class="who">Cloudflare</span>
+          <span class="tag">Top-Speed + Malware-Schutz</span>
+        </div>
+        <p class="muted" style="font-size:13.5px;margin:12px 0 0">
+          Beide validieren DNSSEC, unterstützen DoH/DoT und fälschen keine Antworten.
+          <strong>Nimm den, der auf deiner Leitung schneller ist</strong> — miss das mit dem Tool
+          in Abschnitt 04. In Mitteleuropa liegen beide typischerweise unter&nbsp;20&nbsp;ms.</p>
+      </div>
+
+      <div class="caveat">
+        <h3>⚠︎ Wichtiger Mess-Hinweis (ehrlich)</h3>
+        <p>Dieser Test lief in einer <span class="mono">Cloud (Google, Columbus/Ohio)</span> —
+          <strong>nicht</strong> bei dir. Zwei nachgewiesene Gründe machen eine
+          Geschwindigkeitsmessung <em>für deinen Standort</em> von hier unmöglich:</p>
+        <p>① Die Umgebung <strong>kapert allen UDP-DNS-Verkehr</strong> (belegt: sogar
+          <span class="mono">1.2.3.4</span> „antwortete"). ② Latenz = Entfernung zu <em>dir</em>,
+          nicht zu Ohio. → <strong>Speed misst du lokal</strong> (Abschnitt&nbsp;04);
+          Sicherheit gilt ohnehin überall.</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== 01 METHODIK ===================== -->
+  <section id="methodik">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Was wurde womit gemessen</h2></div>
+    <div class="method">
+      <div class="cell"><div class="k">Werkzeuge</div><div class="v">dnspython · curl DoH</div>
+        <div class="s">UDP/53 + DNS-over-HTTPS (HTTP/2)</div></div>
+      <div class="cell"><div class="k">Sicherheit</div><div class="v">real gemessen</div>
+        <div class="s">DNSSEC · Filter · Hijack · DoH</div></div>
+      <div class="cell"><div class="k">Testabfragen</div><div class="v">~2.400+</div>
+        <div class="s">15 Resolver × Domains × Runden</div></div>
+      <div class="cell"><div class="k">Geschwindigkeit</div><div class="v">lokal (Tool)</div>
+        <div class="s">standortabhängig → Abschnitt 04</div></div>
+    </div>
+    <p class="ftn">Der Trick, der die Sicherheitsmessung trotz DNS-Kaperung valide macht:
+      Anfragen liefen über <strong>DNS-over-HTTPS</strong> zu den echten Anbieter-Hostnamen.
+      Beleg: <span class="mono">whoami.cloudflare</span> lieferte Node <span class="mono">iad19</span>
+      und die Filter reagierten anbieter-korrekt (z.&nbsp;B. Cloudflare-Family →
+      <span class="mono">pornhub.com = 0.0.0.0</span>).</p>
+  </section>
+
+  <!-- ===================== 02 MATRIX ===================== -->
+  <section id="matrix">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Sicherheits- &amp; Filter-Matrix</h2>
+      <span class="muted" style="font-size:13.5px">real gemessen via DoH — standortunabhängig gültig</span></div>
+    <div class="legend">
+      <span class="it"><span class="chip ok">✓</span> vorhanden / aktiv (gemessen)</span>
+      <span class="it"><span class="chip off">–</span> nicht aktiv / offen</span>
+      <span class="it"><span class="pips"><span class="on">●●</span></span> Filterstärke: geblockte Testdomains</span>
+      <span class="it"><span class="chip warn">doc</span> laut Anbieter-Doku (hier nicht messbar)</span>
+    </div>
+    <div class="tablewrap">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th class="provcol" style="text-align:left">Anbieter · IP</th>
+            <th>DNSSEC<br>validiert</th>
+            <th>DoH<br>(443)</th>
+            <th>DoT<br>(853)</th>
+            <th>kein NX-<br>Hijack</th>
+            <th>Malware /<br>Phishing</th>
+            <th>Werbung /<br>Tracker</th>
+            <th>Jugend-<br>schutz</th>
+            <th class="juris" style="text-align:left">Sitz · Datenschutz</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Cloudflare 1.1.1.1 -->
+          <tr>
+            <td class="provcol"><div class="provname">Cloudflare</div><div class="provip" data-copy="1.1.1.1">1.1.1.1 · 1.0.0.1</div><div class="provcat">Speed / Privacy</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · kein Verkauf, KPMG-Audit</td>
+          </tr>
+          <!-- Cloudflare 1.1.1.2 -->
+          <tr>
+            <td class="provcol"><div class="provname">Cloudflare Malware</div><div class="provip" data-copy="1.1.1.2">1.1.1.2</div><div class="provcat">Filter: Malware</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-warn"><span class="mark warn">doc</span><sup style="color:var(--accent)">1</sup></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · kein Verkauf, KPMG-Audit</td>
+          </tr>
+          <!-- Cloudflare 1.1.1.3 -->
+          <tr>
+            <td class="provcol"><div class="provname">Cloudflare Family</div><div class="provip" data-copy="1.1.1.3">1.1.1.3</div><div class="provcat">Filter: Malware+Adult</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-warn"><span class="mark warn">doc</span><sup style="color:var(--accent)">1</sup></td>
+            <td><span class="mark off">–</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span></div></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · kein Verkauf, KPMG-Audit</td>
+          </tr>
+          <!-- Google -->
+          <tr>
+            <td class="provcol"><div class="provname">Google</div><div class="provip" data-copy="8.8.8.8">8.8.8.8 · 8.8.4.4</div><div class="provcat">Speed</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · anonym. Logs ~24–48h</td>
+          </tr>
+          <!-- Quad9 -->
+          <tr>
+            <td class="provcol"><div class="provname">Quad9</div><div class="provip" data-copy="9.9.9.9">9.9.9.9 · 149.112.112.112</div><div class="provcat">Filter: Malware+DNSSEC</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span></div></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇨🇭</span> Schweiz · Non-Profit, keine PII, GDPR</td>
+          </tr>
+          <!-- OpenDNS -->
+          <tr>
+            <td class="provcol"><div class="provname">OpenDNS Home</div><div class="provip" data-copy="208.67.222.222">208.67.222.222</div><div class="provcat">Filter: Security</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●</span><span class="off">●</span></div></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · Cisco, loggt</td>
+          </tr>
+          <!-- OpenDNS FamilyShield -->
+          <tr>
+            <td class="provcol"><div class="provname">OpenDNS FamilyShield</div><div class="provip" data-copy="208.67.222.123">208.67.222.123</div><div class="provcat">Filter: Adult+Security</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●</span><span class="off">●</span></div></td>
+            <td><span class="mark off">–</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span></div></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · Cisco, loggt</td>
+          </tr>
+          <!-- AdGuard -->
+          <tr>
+            <td class="provcol"><div class="provname">AdGuard</div><div class="provip" data-copy="94.140.14.14">94.140.14.14 · .15.15</div><div class="provcat">Filter: Ads+Tracker</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span><span class="off">●</span></div></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇨🇾</span> Zypern (EU) · keine PII</td>
+          </tr>
+          <!-- AdGuard Family -->
+          <tr>
+            <td class="provcol"><div class="provname">AdGuard Family</div><div class="provip" data-copy="94.140.14.15">94.140.14.15 · .15.16</div><div class="provcat">Filter: Ads+Adult</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span><span class="off">●</span></div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span></div></td>
+            <td class="juris"><span class="flag">🇨🇾</span> Zypern (EU) · keine PII</td>
+          </tr>
+          <!-- CleanBrowsing Security -->
+          <tr>
+            <td class="provcol"><div class="provname">CleanBrowsing Security</div><div class="provip" data-copy="185.228.168.9">185.228.168.9</div><div class="provcat">Filter: Security</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span></div></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · minimale Logs</td>
+          </tr>
+          <!-- CleanBrowsing Family -->
+          <tr>
+            <td class="provcol"><div class="provname">CleanBrowsing Family</div><div class="provip" data-copy="185.228.168.168">185.228.168.168</div><div class="provcat">Filter: Adult+Security</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span></div></td>
+            <td><span class="mark off">–</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●</span></div></td>
+            <td class="juris"><span class="flag">🇺🇸</span> US · minimale Logs</td>
+          </tr>
+          <!-- Mullvad -->
+          <tr>
+            <td class="provcol"><div class="provname">Mullvad</div><div class="provip" data-copy="194.242.2.2">194.242.2.2</div><div class="provcat">Privacy (EU)</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇸🇪</span> Schweden (EU) · strikt no-log, kein ECS</td>
+          </tr>
+          <!-- Mullvad AdBlock -->
+          <tr>
+            <td class="provcol"><div class="provname">Mullvad AdBlock</div><div class="provip" data-copy="194.242.2.3">194.242.2.3</div><div class="provcat">Privacy + Ads</div></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark warn">doc</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span></td>
+            <td><span class="mark off">–</span></td>
+            <td class="cell-ok"><span class="mark ok">✓</span><div class="pips"><span class="on">●●●</span></div></td>
+            <td><span class="mark off">–</span></td>
+            <td class="juris"><span class="flag">🇸🇪</span> Schweden (EU) · strikt no-log, kein ECS</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ftn"><sup>1</sup> Cloudflare&nbsp;1.1.1.2/1.1.1.3 filtern laut Anbieter Malware/Phishing.
+      Meine (Cisco/OpenDNS-orientierten) Test-Domains lösten es nicht aus, und Cloudflare
+      veröffentlicht keine offizielle Test-Malware-Domain für den öffentlichen Resolver — daher
+      „doc" statt gemessenem ✓. DNSSEC, DoH, Filter-Reaktion &amp; Hijacking-Freiheit sind dagegen
+      alle in dieser Session real gemessen. DoT (Port&nbsp;853) war aus der Cloud gesperrt und wird
+      von allen Anbietern laut Doku unterstützt.</p>
+  </section>
+
+  <!-- ===================== 03 COVERAGE BARS ===================== -->
+  <section id="coverage">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Gemessene Filterstärke</h2>
+      <span class="muted" style="font-size:13.5px">Anteil geblockter Test-Domains je Kategorie</span></div>
+
+    <h3 style="font-size:15px;margin:0 0 10px;color:var(--ink-2)">Werbung / Tracker <span class="mono" style="font-size:12px;font-weight:400">(3 Testdomains: doubleclick · googleadservices · pubmatic)</span></h3>
+    <div class="bars">
+      <div class="bar-row"><div class="bar-lab">Mullvad AdBlock<small>194.242.2.3</small></div>
+        <div class="bar-track"><div class="bar-fill ads" style="width:100%">3 / 3 geblockt</div></div></div>
+      <div class="bar-row"><div class="bar-lab">AdGuard<small>94.140.14.14</small></div>
+        <div class="bar-track"><div class="bar-fill ads" style="width:66.6%">2 / 3</div></div></div>
+      <div class="bar-row"><div class="bar-lab">AdGuard Family<small>94.140.14.15</small></div>
+        <div class="bar-track"><div class="bar-fill ads" style="width:66.6%">2 / 3</div></div></div>
+      <div class="bar-row"><div class="bar-lab muted">alle übrigen</div>
+        <div class="bar-track"><div class="bar-empty">0 / 3 — kein Werbefilter</div></div></div>
+    </div>
+
+    <h3 style="font-size:15px;margin:26px 0 10px;color:var(--ink-2)">Malware / Phishing <span class="mono" style="font-size:12px;font-weight:400">(2 valide Testdomains: internetbadguys · examplemalwaredomain)</span></h3>
+    <div class="bars">
+      <div class="bar-row"><div class="bar-lab">Quad9<small>9.9.9.9</small></div>
+        <div class="bar-track"><div class="bar-fill mal" style="width:100%">2 / 2 geblockt</div></div></div>
+      <div class="bar-row"><div class="bar-lab">CleanBrowsing Sec.<small>185.228.168.9</small></div>
+        <div class="bar-track"><div class="bar-fill mal" style="width:100%">2 / 2</div></div></div>
+      <div class="bar-row"><div class="bar-lab">CleanBrowsing Family<small>185.228.168.168</small></div>
+        <div class="bar-track"><div class="bar-fill mal" style="width:100%">2 / 2</div></div></div>
+      <div class="bar-row"><div class="bar-lab">OpenDNS (Home / Family)<small>208.67.222.222/.123</small></div>
+        <div class="bar-track"><div class="bar-fill mal" style="width:50%">1 / 2</div></div></div>
+      <div class="bar-row"><div class="bar-lab muted">Cloudflare 1.1.1.2/.3</div>
+        <div class="bar-track"><div class="bar-empty">laut Doku aktiv — Testdomains nicht ausgelöst</div></div></div>
+    </div>
+    <p class="ftn">Die dritte Phishing-Testdomain (<span class="mono">examplephishingdomain.com</span>)
+      wurde von <em>allen</em> Resolvern „geblockt" — also autoritativ nicht existent, kein echtes
+      Filtersignal. Deshalb aus der Wertung genommen. Genau solche Kontrollen trennen echte Filter
+      von Artefakten.</p>
+  </section>
+
+  <!-- ===================== 04 SPEED-TOOL ===================== -->
+  <section id="speed">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Geschwindigkeit zuhause selbst messen</h2></div>
+    <p class="muted" style="margin:0 0 16px;max-width:70ch">Speed muss auf <em>deiner</em> Leitung
+      gemessen werden. Dieses Skript braucht nur Python&nbsp;3 (auf macOS/Linux vorinstalliert,
+      Windows: <span class="mono">python.org</span>) — <strong>keine Installation</strong>. Es misst
+      alle Anbieter über viele Runden, erkennt sogar, ob dein Router DNS umleitet, und gibt eine
+      sortierte Tabelle aus.</p>
+    <div class="tool">
+      <div class="bar-top"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span style="margin-left:6px">Terminal · dns_speed_test.py</span></div>
+<pre><span class="c"># 1) Skript aus dem Repo laden (dns-benchmark/dns_speed_test.py)</span>
+<span class="c"># 2) ausführen — fertig:</span>
+<span class="p">python3</span> dns_speed_test.py
+
+<span class="c"># mehr Runden für stabilere Werte, eigenen Router mittesten:</span>
+<span class="p">python3</span> dns_speed_test.py --rounds 15 --extra 192.168.1.1=Router
+
+<span class="c"># Ergebnis: sortierte Tabelle (min/median/p95/Verlust) + CSV + JSON</span></pre>
+    </div>
+    <div class="expect">
+      <div class="e"><h4>Was in Mitteleuropa typisch ist</h4>
+        <p>Cloudflare, Google &amp; Quad9 betreiben Knoten in Frankfurt/Amsterdam/Zürich — meist
+          <strong>&lt; 20&nbsp;ms</strong>. Kleinere Anbieter (Level3, Comodo) sind oft langsamer/schwankender.
+          <em>Verifiziere es mit dem Tool.</em></p></div>
+      <div class="e"><h4>Worauf es ankommt</h4>
+        <p>Nicht der Bestwert zählt, sondern <strong>Median + p95 + Ausfallrate</strong>: ein Resolver,
+          der selten, aber stark ausreißt, bremst das Surfen spürbarer als ein konstant guter.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== 05 ENTSCHEIDUNG ===================== -->
+  <section id="entscheidung">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Entscheidungshilfe nach Bedarf</h2></div>
+    <div class="cards">
+      <div class="uc primary">
+        <span class="badge">TOP-EMPFEHLUNG</span>
+        <div class="goal">Sicherheit + Datenschutz (EU)</div>
+        <div class="rec">Quad9</div>
+        <div class="ips"><code data-copy="9.9.9.9">9.9.9.9</code><code data-copy="149.112.112.112">149.112.112.112</code></div>
+        <div class="why">Gemessen stärkster Malware-/Phishing-Schutz, DNSSEC, DoH/DoT. Schweizer
+          Non-Profit, GDPR, keine PII — und kein Overblocking von Werbung/Inhalten.</div>
+      </div>
+      <div class="uc primary">
+        <span class="badge">TOP-EMPFEHLUNG</span>
+        <div class="goal">Geschwindigkeit + Malware-Schutz</div>
+        <div class="rec">Cloudflare 1.1.1.2</div>
+        <div class="ips"><code data-copy="1.1.1.2">1.1.1.2</code><code data-copy="1.0.0.2">1.0.0.2</code></div>
+        <div class="why">Global schnellste Anycast-Infrastruktur (in DACH meist top), DNSSEC,
+          DoH/DoT, kein Datenverkauf. Für reinen Speed ohne Filter: <span class="mono">1.1.1.1</span>.</div>
+      </div>
+      <div class="uc">
+        <div class="goal">Werbung &amp; Tracker blocken</div>
+        <div class="rec">AdGuard / Mullvad AdBlock</div>
+        <div class="ips"><code data-copy="94.140.14.14">94.140.14.14</code><code data-copy="194.242.2.3">194.242.2.3</code></div>
+        <div class="why">Gemessen stärkstes Werbe-/Tracker-Blocking (Mullvad 3/3). Mullvad zusätzlich
+          maximale Privatsphäre (Schweden, no-log).</div>
+      </div>
+      <div class="uc">
+        <div class="goal">Familie / Jugendschutz</div>
+        <div class="rec">Cloudflare Family / CleanBrowsing</div>
+        <div class="ips"><code data-copy="1.1.1.3">1.1.1.3</code><code data-copy="185.228.168.168">185.228.168.168</code></div>
+        <div class="why">Gemessen zuverlässige Sperre nicht-jugendfreier Inhalte plus Malware-Schutz.
+          Einfachste „einschalten &amp; fertig"-Lösung.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="mono">Aktiv gemessen 2026-07-24</span>
+    <span>Messpunkt: GCP Columbus/Ohio → echte Anbieter via DoH</span>
+    <span>15 Resolver · Sicherheit gemessen, Speed lokal</span>
+    <span class="mono">Rohdaten: results/security_real.json</span>
+  </footer>
+</div>
+
+<div class="toast" id="toast">kopiert</div>
+<script>
+  // Klick-zum-Kopieren für alle IP-Elemente
+  const toast=document.getElementById('toast');
+  let t=null;
+  document.querySelectorAll('[data-copy]').forEach(el=>{
+    el.title='Klick zum Kopieren';
+    el.addEventListener('click',async()=>{
+      try{await navigator.clipboard.writeText(el.dataset.copy);
+        toast.textContent=el.dataset.copy+' kopiert';toast.classList.add('show');
+        clearTimeout(t);t=setTimeout(()=>toast.classList.remove('show'),1300);
+      }catch(e){}
+    });
+  });
+</script>
