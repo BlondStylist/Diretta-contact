@@ -37,8 +37,9 @@ lauf2() {
   ok "L2 compare: REMOVED mit Leerzeichen im Pfad" 'grep -q "REMOVED /etc/sysctl.d/zz t.conf" <<<"$cmp"'
   ok "L2 compare: identische Snapshots liefern keine Dateiunterschiede" 'c2="$(bash "$here/compare.sh" "$B" "$B")"; ! grep -qE "^(CHANGED|ADDED|REMOVED)" <<<"$c2"'
   ok "L2 compare: kein Rauschen aus df/timers/sysctl-Zaehlern" '! grep -qE "^[-+].*(ns_last_pid|dentry-state|Use%)" <<<"$cmp"'
-  s1="$(snap gleich | grep Fertig)"; s2="$(snap gleich | grep Fertig)"
-  ok "L2 zwei Laeufe in derselben Sekunde vermischen sich nicht" '[[ "$s1" != "$s2" ]] && [[ "$(ls "$W"/out | grep -c "^snapshot-.*gleich.*[0-9]$")" == 2 ]]'
+  mkdir "$W/clk"; printf '#!/bin/sh\n[ "$1" = "+%%Y%%m%%d-%%H%%M%%S" ] && echo 20260101-000000 || exec %s "$@"\n' "$(command -v date)" > "$W/clk/date"; chmod +x "$W/clk/date"
+  s1="$(PATH="$W/clk:$PATH" OUT_BASE="$W/out" SAMPLE=0 bash "$here/snapshot.sh" gleich 2>&1 | grep Fertig)"; s2="$(PATH="$W/clk:$PATH" OUT_BASE="$W/out" SAMPLE=0 bash "$here/snapshot.sh" gleich 2>&1 | grep Fertig)"
+  ok "L2 zwei Laeufe mit identischer Zeit ueberschreiben sich nicht (festgesetzte Uhr)" '[[ "$s1" != "$s2" && "$(ls "$W"/out | grep -c "^snapshot-.*-gleich-20260101-000000.*\.tar\.gz$")" == 2 ]]'
 }
 
 lauf3() {
