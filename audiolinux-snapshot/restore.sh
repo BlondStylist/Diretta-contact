@@ -22,8 +22,11 @@ for arg in "$@"; do
   esac
   rel="${p#/}"
   if ! tar -tzf "$t/files.tar.gz" "$rel" >/dev/null 2>&1; then echo "nicht im Snapshot: $p"; rc=1; continue; fi
+  rm -rf "$t/x"; mkdir "$t/x"                                    # erst probeweise entpacken: unsichere/kaputte Archive fallen hier auf
+  if ! tar -xzpf "$t/files.tar.gz" -C "$t/x" "$rel" 2>"$t/err"; then
+    echo "FEHLER: $p: Entpacken in Temp fehlgeschlagen (inkonsistentes Archiv oder Symlink-Durchgriff?): $(head -c 200 "$t/err")"; rc=1; continue
+  fi
   if [[ ${DRY_RUN:-1} != 0 ]]; then
-    rm -rf "$t/x"; mkdir "$t/x"; tar -xzpf "$t/files.tar.gz" -C "$t/x" "$rel"
     echo "[Trockenlauf] wuerde zuruecksetzen: $p"
     d="$(diff -ru -- "$t/x/$rel" "$p" 2>&1 | sed '1,2d' | head -20)"; echo "${d:-  (keine Unterschiede)}"; continue
   fi

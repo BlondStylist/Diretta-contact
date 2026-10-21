@@ -15,4 +15,6 @@ done
 echo "=== Dateien (Pruefsummen) ==="
 files="$(awk 'NR==FNR{o[substr($0,67)]=substr($0,1,64);next} {p=substr($0,67);n[p]=substr($0,1,64)} END{for(p in o)if(!(p in n))print "REMOVED",p;else if(o[p]!=n[p])print "CHANGED",p;for(p in n)if(!(p in o))print "ADDED  ",p}' "$t/a/manifest.sha256" "$t/b/manifest.sha256" | sort -k2)"
 [[ -n $files ]] && { echo "$files"; diffs=1; }
+pn="$(grep -E '^(ADDED|CHANGED) .*\.(pacnew|pacsave)$' <<<"$files")"
+[[ -n $pn ]] && { echo "=== .pacnew/.pacsave: von Hand pruefen, nie blind uebernehmen ==="; echo "$pn"; }
 exit "$diffs"

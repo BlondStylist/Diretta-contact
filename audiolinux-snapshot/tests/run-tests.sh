@@ -5,8 +5,9 @@
 set -uo pipefail
 [[ ${SNAPSHOT_TEST:-} == 1 && $EUID -eq 0 ]] || { echo "Nur als root mit SNAPSHOT_TEST=1 (veraendert /etc/sysctl.d, /home/audiolinux)" >&2; exit 2; }
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; W="$(mktemp -d)"; pass=0; fail=0
-had_home=0; [[ -d /home/audiolinux ]] && had_home=1
-cleanup() { rm -rf "$W" /opt/configuration/zz-d /etc/sysctl.d/zz-t-* /etc/sudoers.d/zz-t-* /home/audiolinux/zz-* "/etc/sysctl.d/zz t.conf"; (( had_home )) || rm -rf /home/audiolinux; }
+made_user=0
+if ! id audiolinux >/dev/null 2>&1 && command -v useradd >/dev/null; then useradd -m -s /bin/bash audiolinux && made_user=1; fi
+cleanup() { rm -rf "$W" /opt/configuration/zz-d /etc/zz-t-* /etc/sysctl.d/zz-t-* /etc/sudoers.d/zz-t-* /etc/ssh/ssh_host_zz_key /tmp/zz-t-escape /home/audiolinux/zz-* /home/audiolinux/snapshots "/etc/sysctl.d/zz t.conf"; (( made_user )) && userdel -r audiolinux >/dev/null 2>&1; }
 trap cleanup EXIT
 ok() { if ( set +o pipefail; eval "$2" ) >/dev/null 2>&1; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; fi; }
 snap() { OUT_BASE="$W/out" SAMPLE=0 bash "$here/snapshot.sh" "$@" 2>&1; }
@@ -75,8 +76,9 @@ lauf4() {
     p="$(command -v "$c")" && ln -s "$p" "$W/bin/$c"; done
   o="$(PATH="$W/bin" OUT_BASE="$W/min" SAMPLE=0 bash "$here/snapshot.sh" min 2>&1)"; r=$?
   ok "L4 ohne Pi-/Arch-Werkzeuge: Exit 0 und Archiv da" '[[ $r -eq 0 ]] && ls "$W"/min/*.tar.gz'
-  ok "L4 fehlende Tools stehen im Bericht (nicht still verschluckt)" 'grep -rq "not found" "$W"/min/snapshot-*/report/'
-  ok "L4 Konfigurationsdateien trotzdem gesichert" 'tar -xzOf "$W"/min/snapshot-*/files.tar.gz etc/sysctl.d/zz-t-x.conf | grep -q "^a$"'
+  mkdir "$W/minx"; tar -xzf "$W"/min/snapshot-*.tar.gz -C "$W/minx" --strip-components=1
+  ok "L4 fehlende Tools stehen im Bericht (nicht still verschluckt)" 'grep -rq "not found" "$W/minx/report/"'
+  ok "L4 Konfigurationsdateien trotzdem gesichert" 'tar -xzOf "$W/minx/files.tar.gz" etc/sysctl.d/zz-t-x.conf | grep -q "^a$"'
   id nobody >/dev/null 2>&1 && { runuser -u nobody -- bash "$here/snapshot.sh" >/dev/null 2>&1; r=$?; ok "L4 ohne Root: Exit 4" '[[ $r -eq 4 ]]'; }
   if (( $(nproc) >= 2 )) && command -v taskset >/dev/null; then
     OUT_BASE="$W/aff" SAMPLE=3 bash "$here/snapshot.sh" aff >/dev/null 2>&1 & pid=$!; sleep 1
@@ -96,5 +98,105 @@ lauf4() {
   echo changed >> /etc/sysctl.d/zz-t-x.conf; snap c3 >/dev/null; bash "$here/compare.sh" "$A" "$(newest c3)" >/dev/null 2>&1; r=$?; ok "L4 compare: Unterschied -> Exit 1" '[[ $r -eq 1 ]]'
   t0=$(date +%s); snap zeit >/dev/null; echo "INFO: Laufzeit $(( $(date +%s)-t0 )) s, Archiv $(du -h "$(newest zeit)" | cut -f1)"
 }
-for l in ${1:-all}; do case "$l" in all) lauf2; lauf3; lauf4;; lauf2) lauf2;; lauf3) lauf3;; lauf4) lauf4;; esac; done
+
+xt() { mkdir -p "$2"; tar -xzf "$1" -C "$2" --strip-components=1; }
+
+lauf5() {  # Angreifersicht: root schreibt nie in vom Nutzer kontrollierte Pfade; manipulierte Archive
+  if id audiolinux >/dev/null 2>&1; then
+    rm -rf /home/audiolinux/snapshots; mkdir -m 700 "$W/victim"
+    runuser -u audiolinux -- ln -sfn "$W/victim" /home/audiolinux/snapshots
+    o="$(snap sym)"
+    ok "L5 Symlink ~/snapshots -> Fremdverzeichnis: root schreibt NICHT hinein" '[[ -z "$(ls -A "$W/victim")" ]]'
+    ok "L5 Symlink wird gemeldet" 'grep -qi "symlink\|fehlgeschlagen" <<<"$o"'
+    rm -f /home/audiolinux/snapshots; snap ok1 >/dev/null
+    ok "L5 normale Kopie gehoert audiolinux, 0600" '[[ "$(stat -c "%U %a" /home/audiolinux/snapshots/*ok1*.tar.gz)" == "audiolinux 600" ]]'
+    echo SECRET > /etc/zz-t-victim; ln -s /etc/zz-t-victim /home/audiolinux/snapshots/zz-planted
+    ok "L5 Verzeichnis ~/snapshots gehoert dem Nutzer (kein root-Besitz)" '[[ "$(stat -c %U /home/audiolinux/snapshots)" == audiolinux ]]'
+  else echo "SKIP: kein Testnutzer audiolinux (useradd fehlt)"; fi
+  printf 'x\n' > "/etc/sysctl.d/zz-t-nl
+x.conf"
+  snap nl >/dev/null; r=$?; ok "L5 Dateiname mit Zeilenumbruch bricht den Snapshot nicht" '[[ $r -eq 0 ]]'
+  bash "$here/compare.sh" "$(newest nl)" "$(newest nl)" >/dev/null 2>&1; r=$?; ok "L5 compare stuerzt bei Zeilenumbruch-Namen nicht ab" '[[ $r -le 1 ]]'
+  rm -f /etc/sysctl.d/zz-t-nl*
+  # manipuliertes Archiv: Member laeuft durch einen Symlink nach draussen
+  snap crafted >/dev/null; mkdir -p /tmp/zz-t-escape "$W/cr"; xt "$(newest crafted)" "$W/cr"
+  python3 -I - "$W/cr/files.tar.gz" <<'PY'
+import tarfile,io,sys
+with tarfile.open(sys.argv[1],'w:gz') as t:
+    d=tarfile.TarInfo('etc/sysctl.d'); d.type=tarfile.DIRTYPE; d.mode=0o755; t.addfile(d)
+    l=tarfile.TarInfo('etc/sysctl.d/zz-t-link'); l.type=tarfile.SYMTYPE; l.linkname='/tmp/zz-t-escape'; t.addfile(l)
+    f=tarfile.TarInfo('etc/sysctl.d/zz-t-link/pwn'); data=b'pwned'; f.size=len(data); t.addfile(f,io.BytesIO(data))
+PY
+  (cd "$W" && tar -czf evil.tar.gz cr)
+  o="$(DRY_RUN=0 BACKUP_DIR="$W/bak" bash "$here/restore.sh" "$W/evil.tar.gz" /etc/sysctl.d 2>&1)"; r=$?
+  ok "L5 Archiv mit Symlink-Durchgriff: nichts ausserhalb geschrieben" '[[ ! -e /tmp/zz-t-escape/pwn ]]'
+  ok "L5 Archiv mit Symlink-Durchgriff wird abgelehnt (Exit != 0, Meldung)" '[[ $r -ne 0 ]] && grep -qi "symlink" <<<"$o"'
+  rm -rf /tmp/zz-t-escape /etc/sysctl.d/zz-t-link
+}
+
+lauf6() {  # Betriebsfehler: SSH-Abbruch, Strg-C, ramroot, Stromausfall, Hostname-Tool fehlt
+  snap one >/dev/null
+  ok "L6 nach Erfolg bleibt nur das Archiv (kein entpacktes Doppel)" '[[ -z "$(ls -d "$W"/out/snapshot-*one-* 2>/dev/null | grep -v "\.tar\.gz$")" ]]'
+  OUT_BASE="$W/int" SAMPLE=6 bash "$here/snapshot.sh" intr >/dev/null 2>&1 & pid=$!; sleep 2; kill -TERM "$pid"; wait "$pid"; r=$?
+  ok "L6 Abbruch per Signal (Strg-C/kill): Exit 130, kein Halbarchiv, kein Rest-Verzeichnis" '[[ $r -eq 130 && -z "$(ls -A "$W/int" 2>/dev/null)" ]]'
+  OUT_BASE="$W/hup" SAMPLE=4 bash "$here/snapshot.sh" hup >/dev/null 2>&1 & pid=$!; sleep 2; kill -HUP "$pid"; wait "$pid"; r=$?
+  ok "L6 SSH-Abbruch (SIGHUP): Lauf endet trotzdem mit vollstaendigem Archiv" '[[ $r -eq 0 ]] && ls "$W"/hup/*.tar.gz'
+  mkdir "$W/stub"; printf '#!/bin/sh\necho tmpfs\n' > "$W/stub/findmnt"; printf '#!/bin/sh\ntouch %s\n' "$W/synced" > "$W/stub/sync"; chmod +x "$W/stub"/*
+  o="$(PATH="$W/stub:$PATH" OUT_BASE="$W/ram" SAMPLE=0 bash "$here/snapshot.sh" ram 2>&1)"
+  ok "L6 ramroot/tmpfs-Root: Warnung, Archiv sofort zu sichern" 'grep -qi "ramroot\|RAM" <<<"$o"'
+  ok "L6 sync wird am Ende aufgerufen (Stromausfall/Omni-Haenger direkt danach)" '[[ -e "$W/synced" ]]'
+  mkdir "$W/nohost"; for c in bash sh tar gzip find xargs sha256sum sort awk df cat ls date mkdir chmod cp du wc sleep grep head tail sed stat basename dirname mktemp rm readlink realpath uname id install cut tr; do p="$(command -v "$c")" && ln -s "$p" "$W/nohost/$c"; done
+  PATH="$W/nohost" OUT_BASE="$W/nh" SAMPLE=0 bash "$here/snapshot.sh" nh >/dev/null 2>&1; r=$?
+  ok "L6 ohne hostname-Tool: Lauf ok, Name enthaelt Rechnernamen" '[[ $r -eq 0 ]] && ls "$W"/nh/snapshot-"$(uname -n)"-nh-*.tar.gz'
+  o="$(PATH="$W/nohost" OUT_BASE="$W/nh2" SAMPLE=0 bash "$here/snapshot.sh" nh2 2>&1)"
+  ok "L6 Zusammenfassung nennt fehlgeschlagene Befehle" 'grep -qi "Befehle mit Fehler" <<<"$o"'
+  ok "L6 keine Bash-Warnung ueber NUL-Bytes" '! grep -qi "null byte" <<<"$o"'
+}
+
+lauf7() {  # Vollstaendigkeit: deckt das Archiv wirklich ALLE Einstellungen ab?
+  mkdir -p /etc/zz-t-conf.d /etc/ssh; echo k > /etc/zz-t-conf.d/foo.conf; echo secret > /etc/ssh/ssh_host_zz_key; ln -sfn a /etc/zz-t-link
+  snap full >/dev/null; A="$(newest full)"; xt "$A" "$W/f"
+  ok "C7 beliebige Datei unter /etc (ausserhalb der alten Liste) ist im Archiv" 'tar -tzf "$W/f/files.tar.gz" | grep -q etc/zz-t-conf.d/foo.conf'
+  ok "C7 Host-Schluessel und shadow sind NICHT im Archiv" '! tar -tzf "$W/f/files.tar.gz" | grep -qE "ssh_host_zz_key|etc/shadow"'
+  ok "C7 Manifest deckt jede Archivdatei und jeden Symlink ab" '[[ "$(tar -tzf "$W/f/files.tar.gz" | grep -vc "/$")" == "$(wc -l < "$W/f/manifest.sha256")" ]]'
+  ok "C7 Symlink steht im Manifest" 'grep -q " /etc/zz-t-link$" "$W/f/manifest.sha256"'
+  ln -sfn b /etc/zz-t-link; echo n > /etc/zz-t-conf.d/x.conf.pacnew; sleep 1; snap full2 >/dev/null
+  c="$(bash "$here/compare.sh" "$A" "$(newest full2)")"
+  ok "C7 geaenderter Symlink-Zielpfad wird als CHANGED erkannt" 'grep -q "CHANGED /etc/zz-t-link" <<<"$c"'
+  ok "C7 neue .pacnew-Datei wird gesondert hervorgehoben" 'grep -q "pacnew" <<<"$c" && grep -A3 -i "pacnew" <<<"$c" | grep -q x.conf.pacnew'
+  ok "C7 Bericht enthaelt Wurzel-Dateisystem und MAC-Adressen-Quelle" 'grep -rq "findmnt\|/proc/mounts" "$W/f/report/00-system.txt"'
+}
+
+lauf8() {  # Rundreise: aendern -> zurueckspielen -> vergleichen; Snapshot veraendert nichts
+  mkdir -p /etc/zz-t-rt/sub; echo a > /etc/zz-t-rt/a.conf; echo b > /etc/zz-t-rt/sub/b.conf; chmod 640 /etc/zz-t-rt/a.conf; chown 1234:5678 /etc/zz-t-rt/sub/b.conf
+  touch -d '2026-01-02 03:04:05' /etc/zz-t-rt/a.conf; ln -s a.conf /etc/zz-t-rt/l
+  before="$(cd /etc/zz-t-rt && find . -printf "%p %m %U:%G %T@ %l\n" | sort)"
+  snap pre >/dev/null; P="$(newest pre)"
+  echo changed > /etc/zz-t-rt/a.conf; chmod 600 /etc/zz-t-rt/a.conf; rm /etc/zz-t-rt/sub/b.conf; rm /etc/zz-t-rt/l; echo f > /etc/zz-t-rt/l; echo new > /etc/zz-t-rt/new.conf
+  rm -rf /etc/zz-t-rt/sub; echo "ich bin jetzt eine Datei" > /etc/zz-t-rt/sub
+  DRY_RUN=0 BACKUP_DIR="$W/bak" bash "$here/restore.sh" "$P" /etc/zz-t-rt/a.conf /etc/zz-t-rt/l >/dev/null 2>&1
+  ok "L8 Datei: Inhalt, Modus, Zeitstempel zurueck" '[[ "$(cat /etc/zz-t-rt/a.conf)" == a && "$(stat -c %a /etc/zz-t-rt/a.conf)" == 640 && "$(stat -c %Y /etc/zz-t-rt/a.conf)" == "$(date -d "2026-01-02 03:04:05" +%s)" ]]'
+  ok "L8 Typwechsel Datei->Symlink wird zurueckgesetzt" '[[ -L /etc/zz-t-rt/l && "$(readlink /etc/zz-t-rt/l)" == a.conf ]]'
+  o="$(DRY_RUN=0 BACKUP_DIR="$W/bak" bash "$here/restore.sh" "$P" /etc/zz-t-rt/sub 2>&1)"; r=$?
+  ok "L8 Typwechsel Ordner->Datei: entweder korrekt hergestellt oder laut gescheitert" '{ [[ -d /etc/zz-t-rt/sub && "$(cat /etc/zz-t-rt/sub/b.conf)" == b ]]; } || { [[ $r -ne 0 ]] && grep -q FEHLER <<<"$o"; }'
+  [[ -f /etc/zz-t-rt/sub ]] && DRY_RUN=0 BACKUP_DIR="$W/bak" bash "$here/restore.sh" "$P" /etc/zz-t-rt/sub >/dev/null 2>&1
+  DRY_RUN=0 BACKUP_DIR="$W/bak" bash "$here/restore.sh" "$P" /etc/zz-t-rt >/dev/null 2>&1
+  ok "L8 zweites Zurueckspielen ist idempotent und stellt Besitzer 1234:5678 her" '[[ "$(stat -c %u:%g /etc/zz-t-rt/sub/b.conf)" == 1234:5678 ]]'
+  after="$(cd /etc/zz-t-rt && find . -printf "%p %m %U:%G %T@ %l\n" | sort | grep -v "new.conf")"
+  ok "L8 Rundreise: Pfad, Modus, Besitzer, Link-Ziel identisch (tar stellt Zeiten nur sekundengenau her)" '[[ "$(awk "{\$4=\"\"; print}" <<<"$before")" == "$(awk "{\$4=\"\"; print}" <<<"$after")" ]]'
+  snap post >/dev/null; c="$(bash "$here/compare.sh" "$P" "$(newest post)")"
+  ok "L8 Vergleich nach Restore: nur die bewusst belassene neue Datei unterscheidet sich" '[[ "$(grep -E "^(CHANGED|REMOVED|ADDED)" <<<"$c" | grep zz-t-rt | tr -s " ")" == "ADDED /etc/zz-t-rt/new.conf" ]]'
+  # Snapshot veraendert nichts
+  touch "$W/marker"; sleep 1; snap noeffect >/dev/null
+  ok "L8 Snapshot schreibt nichts in /etc, /opt, /boot, /var/lib" '[[ -z "$(find /etc /opt /boot /var/lib -xdev -newer "$W/marker" -type f 2>/dev/null | head -1)" ]]'
+  # Gesamtszenario: pre -> simulierter Update -> post -> compare -> gezielt zurueck
+  mkdir -p /etc/zz-t-up; echo keep > /etc/zz-t-up/keep.conf; echo old > /etc/zz-t-up/set.conf; snap upre >/dev/null; U="$(newest upre)"
+  echo "update-wirkung" > /etc/zz-t-up/set.conf; echo n > /etc/zz-t-up/set.conf.pacnew; rm /etc/zz-t-up/keep.conf; sleep 1; snap upost >/dev/null
+  c="$(bash "$here/compare.sh" "$U" "$(newest upost)" | grep -E "^(CHANGED|REMOVED|ADDED)" | grep zz-t-up | tr -s " " | sort -u)"
+  ok "L8 Szenario: Vergleich liefert exakt die simulierten Update-Wirkungen" '[[ "$c" == "$(printf "ADDED /etc/zz-t-up/set.conf.pacnew\nCHANGED /etc/zz-t-up/set.conf\nREMOVED /etc/zz-t-up/keep.conf")" ]]'
+  DRY_RUN=0 BACKUP_DIR="$W/bak" bash "$here/restore.sh" "$U" /etc/zz-t-up/keep.conf >/dev/null 2>&1
+  ok "L8 Szenario: gezieltes Zurueckspielen stellt nur die gewaehlte Datei her" '[[ "$(cat /etc/zz-t-up/keep.conf)" == keep && "$(cat /etc/zz-t-up/set.conf)" == update-wirkung ]]'
+  rm -rf /etc/zz-t-up /etc/zz-t-rt
+}
+for l in ${1:-all}; do case "$l" in all) lauf2; lauf3; lauf4; lauf5; lauf6; lauf7; lauf8;; lauf2) lauf2;; lauf3) lauf3;; lauf4) lauf4;; lauf5) lauf5;; lauf6) lauf6;; lauf7) lauf7;; lauf8) lauf8;; esac; done
 echo "bestanden: $pass, fehlgeschlagen: $fail"; (( fail == 0 ))
