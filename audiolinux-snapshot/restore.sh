@@ -1,16 +1,34 @@
 #!/usr/bin/env bash
-# Spielt einzelne Dateien/Ordner aus einem Snapshot zurueck. Standard ist Trockenlauf; aktuelle Datei wird vorher gesichert.
-# Usage: [DRY_RUN=0] sudo bash restore.sh snapshot-*.tar.gz /abs/pfad [/abs/pfad ...]
+# Spielt einzelne Dateien/Ordner aus einem Snapshot zurueck. Standard ist Trockenlauf; die aktuelle Fassung wird vorher gesichert.
+# Neue Dateien in einem Ordner bleiben bestehen (es wird nichts geloescht).
+# Usage: [DRY_RUN=0] [FORCE=1] sudo bash restore.sh snapshot-*.tar.gz /abs/pfad [/abs/pfad ...]
+# Exit: 0 alles ok | 1 mindestens ein Pfad abgelehnt/nicht gefunden | 2 Aufruf/Snapshot
 set -uo pipefail
-[[ $EUID -eq 0 && $# -ge 2 ]] || { echo "Usage: sudo [DRY_RUN=0] bash $0 snapshot.tar.gz /abs/pfad..." >&2; exit 2; }
-snap="$(readlink -f "$1")"; shift; t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
-tar -xzf "$snap" -C "$t" --strip-components=1 --wildcards '*/files.tar.gz' || exit 3
-bak="/root/config-archiv/pre-restore-$(date +%Y%m%d-%H%M%S)"
-for p in "$@"; do
-  case "$p" in /opt/scripts*|/usr*|/var/lib/pacman*|/lib*) echo "ABGELEHNT: $p (Menue-/Paketcode nie zurueckspielen)"; continue;; esac
-  if ! tar -tzf "$t/files.tar.gz" "${p#/}" >/dev/null 2>&1; then echo "nicht im Snapshot: $p"; continue; fi
-  if [[ ${DRY_RUN:-1} == 1 ]]; then echo "[Trockenlauf] wuerde zuruecksetzen: $p"; diff -ru <(tar -xzOf "$t/files.tar.gz" "${p#/}" 2>/dev/null) "$p" 2>/dev/null | head -20; continue; fi
-  mkdir -p "$bak$(dirname "$p")"; cp -a "$p" "$bak$p" 2>/dev/null
-  tar -xzpf "$t/files.tar.gz" -C / "${p#/}" && echo "zurueckgespielt: $p (Sicherung: $bak$p)"
+[[ $EUID -eq 0 && $# -ge 2 ]] || { echo "Usage: sudo [DRY_RUN=0] [FORCE=1] bash $0 snapshot.tar.gz /abs/pfad..." >&2; exit 2; }
+snap="$(readlink -f -- "$1")"; shift
+[[ -f $snap ]] || { echo "Snapshot nicht gefunden: $snap" >&2; exit 2; }
+t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+tar -xzf "$snap" -C "$t" --strip-components=1 --wildcards '*/files.tar.gz' 2>/dev/null && [[ -f $t/files.tar.gz ]] || { echo "Kein files.tar.gz im Snapshot" >&2; exit 2; }
+bak="${BACKUP_DIR:-/root/config-archiv}/pre-restore-$(date +%Y%m%d-%H%M%S)"; rc=0
+for arg in "$@"; do
+  if [[ $arg != /* ]]; then echo "ABGELEHNT: $arg (nur absolute Pfade)"; rc=1; continue; fi
+  p="$(realpath -m -- "$arg")"                                   # loest .. und // auf, bevor geprueft wird
+  case "$p" in
+    /|/opt/scripts|/opt/scripts/*|/usr|/usr/*|/lib|/lib/*|/var/lib/pacman|/var/lib/pacman/*|/bin|/bin/*|/sbin|/sbin/*)
+      echo "ABGELEHNT: $arg (Menue-/Paketcode oder Systemwurzel nie zurueckspielen)"; rc=1; continue;;
+    /etc/fstab|/boot|/boot/*)
+      if [[ ${FORCE:-0} != 1 ]]; then echo "ABGELEHNT: $arg (bootrelevant; mit FORCE=1 und SD-Image-Backup)"; rc=1; continue; fi;;
+    /etc/systemd/network|/etc/systemd/network/*) echo "HINWEIS: $p aendert das Netzwerk, vorher deadman/zweites SSH-Fenster bereithalten";;
+  esac
+  rel="${p#/}"
+  if ! tar -tzf "$t/files.tar.gz" "$rel" >/dev/null 2>&1; then echo "nicht im Snapshot: $p"; rc=1; continue; fi
+  if [[ ${DRY_RUN:-1} != 0 ]]; then
+    rm -rf "$t/x"; mkdir "$t/x"; tar -xzpf "$t/files.tar.gz" -C "$t/x" "$rel"
+    echo "[Trockenlauf] wuerde zuruecksetzen: $p"
+    d="$(diff -ru -- "$t/x/$rel" "$p" 2>&1 | sed '1,2d' | head -20)"; echo "${d:-  (keine Unterschiede)}"; continue
+  fi
+  mkdir -p "$bak$(dirname "$p")"; cp -a -- "$p" "$bak$p" 2>/dev/null
+  if tar -xzpf "$t/files.tar.gz" -C / "$rel"; then echo "zurueckgespielt: $p (vorherige Fassung: $bak$p)"; else echo "FEHLER beim Zurueckspielen: $p"; rc=1; fi
 done
 echo "Danach: systemctl daemon-reload; betroffene Dienste NICHT waehrend der Wiedergabe neu starten."
+exit "$rc"
