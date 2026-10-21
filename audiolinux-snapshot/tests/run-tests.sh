@@ -143,8 +143,8 @@ lauf6() {  # Betriebsfehler: SSH-Abbruch, Strg-C, ramroot, Stromausfall, Hostnam
   OUT_BASE="$W/hup" SAMPLE=4 bash "$here/snapshot.sh" hup >/dev/null 2>&1 & pid=$!; sleep 2; kill -HUP "$pid"; wait "$pid"; r=$?
   ok "L6 SSH-Abbruch (SIGHUP): Lauf endet trotzdem mit vollstaendigem Archiv" '[[ $r -eq 0 ]] && ls "$W"/hup/*.tar.gz'
   mkdir "$W/stub"; printf '#!/bin/sh\necho tmpfs\n' > "$W/stub/findmnt"; printf '#!/bin/sh\ntouch %s\n' "$W/synced" > "$W/stub/sync"; chmod +x "$W/stub"/*
-  o="$(PATH="$W/stub:$PATH" OUT_BASE="$W/ram" SAMPLE=0 bash "$here/snapshot.sh" ram 2>&1)"
-  ok "L6 ramroot/tmpfs-Root: Warnung, Archiv sofort zu sichern" 'grep -qi "ramroot\|RAM" <<<"$o"'
+  o="$(PATH="$W/stub:$PATH" OUT_BASE="$W/ram" SAMPLE=0 bash "$here/snapshot.sh" lbl 2>&1)"
+  ok "L6 ramroot/tmpfs-Root: Warnung, Archiv sofort zu sichern" 'grep -q "WARNUNG: Root-Dateisystem ist .tmpfs." <<<"$o"'
   ok "L6 sync wird am Ende aufgerufen (Stromausfall/Omni-Haenger direkt danach)" '[[ -e "$W/synced" ]]'
   mkdir "$W/nohost"; for c in bash sh tar gzip find xargs sha256sum sort awk df cat ls date mkdir chmod cp du wc sleep grep head tail sed stat basename dirname mktemp rm readlink realpath uname id install cut tr; do p="$(command -v "$c")" && ln -s "$p" "$W/nohost/$c"; done
   PATH="$W/nohost" OUT_BASE="$W/nh" SAMPLE=0 bash "$here/snapshot.sh" nh >/dev/null 2>&1; r=$?
@@ -164,7 +164,7 @@ lauf7() {  # Vollstaendigkeit: deckt das Archiv wirklich ALLE Einstellungen ab?
   ln -sfn b /etc/zz-t-link; echo n > /etc/zz-t-conf.d/x.conf.pacnew; sleep 1; snap full2 >/dev/null
   c="$(bash "$here/compare.sh" "$A" "$(newest full2)")"
   ok "C7 geaenderter Symlink-Zielpfad wird als CHANGED erkannt" 'grep -q "CHANGED /etc/zz-t-link" <<<"$c"'
-  ok "C7 neue .pacnew-Datei wird gesondert hervorgehoben" 'grep -q "pacnew" <<<"$c" && grep -A3 -i "pacnew" <<<"$c" | grep -q x.conf.pacnew'
+  ok "C7 neue .pacnew-Datei steht im eigenen Warnabschnitt" 'grep -A3 "von Hand pruefen" <<<"$c" | grep -q "ADDED.*x.conf.pacnew"'
   ok "C7 Bericht enthaelt Wurzel-Dateisystem und MAC-Adressen-Quelle" 'grep -rq "findmnt\|/proc/mounts" "$W/f/report/00-system.txt"'
 }
 
