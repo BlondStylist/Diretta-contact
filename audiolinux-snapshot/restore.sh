@@ -2,8 +2,9 @@
 # Spielt einzelne Dateien/Ordner aus einem Snapshot zurueck. Standard ist Trockenlauf; die aktuelle Fassung wird vorher gesichert.
 # Neue Dateien in einem Ordner bleiben bestehen (es wird nichts geloescht).
 # Usage: [DRY_RUN=0] [FORCE=1] sudo bash restore.sh snapshot-*.tar.gz /abs/pfad [/abs/pfad ...]
-# Exit: 0 alles ok | 1 mindestens ein Pfad abgelehnt/nicht gefunden | 2 Aufruf/Snapshot
+# Exit: 0 alles ok | 1 mindestens ein Pfad abgelehnt/nicht gefunden | 2 Aufruf/Snapshot | 3 Werkzeug fehlt
 set -uo pipefail
+need=(tar gzip diff realpath mktemp grep); for c in "${need[@]}"; do command -v "$c" >/dev/null 2>&1 || { echo "Fehlendes Werkzeug: $c (Arch: pacman -S diffutils coreutils tar gzip gawk)" >&2; exit 3; }; done
 [[ $EUID -eq 0 && $# -ge 2 ]] || { echo "Usage: sudo [DRY_RUN=0] [FORCE=1] bash $0 snapshot.tar.gz /abs/pfad..." >&2; exit 2; }
 snap="$(readlink -f -- "$1")"; shift
 [[ -f $snap ]] || { echo "Snapshot nicht gefunden: $snap" >&2; exit 2; }

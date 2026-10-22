@@ -2,10 +2,13 @@
 # Sichert Konfiguration + Zustand eines AudioLinux-Geraets (Diretta Host oder Target) fuer den Vorher/Nachher-Vergleich.
 # Nur lesend ausser der Ausgabe. Kein shadow, keine privaten SSH-/Host-Schluessel.
 # Usage: sudo bash snapshot.sh [label]        Env: OUT_BASE=/root/config-archiv  SAMPLE=10 (Sekunden IRQ-Delta, 0=aus)
-# Exit: 0 ok | 4 kein Root | 5 Archiv unvollstaendig | 7 zu wenig Platz | 130 abgebrochen
+# Exit: 0 ok | 3 Pflicht-Werkzeug fehlt | 4 kein Root | 5 Archiv unvollstaendig | 7 zu wenig Platz | 130 abgebrochen
 # shellcheck disable=SC2016  # Befehle gehen bewusst als String an bash -c
 set -uo pipefail
 [[ $EUID -eq 0 ]] || { echo "Als root starten: sudo bash $0 [label]" >&2; exit 4; }
+need=(tar gzip find xargs sha256sum sort awk df mktemp grep sed cut wc du head tail readlink date uname)
+miss=(); for c in "${need[@]}"; do command -v "$c" >/dev/null 2>&1 || miss+=("$c"); done
+(( ${#miss[@]} == 0 )) || { echo "Fehlende Pflicht-Werkzeuge: ${miss[*]} (Arch: pacman -S coreutils findutils gawk tar gzip grep sed diffutils)" >&2; exit 3; }
 export LC_ALL=C LANG=C                       # stabile Ausgabe: keine Sprachunterschiede im Vergleich
 trap '' HUP                                  # SSH-Abbruch beendet den Lauf nicht
 taskset -pc 0,1 $$ >/dev/null 2>&1; renice -n 19 -p $$ >/dev/null 2>&1; ionice -c3 -p $$ >/dev/null 2>&1   # Audiokerne 2-3 nicht stoeren
@@ -41,7 +44,7 @@ cap $r/20-services 'systemctl list-unit-files --no-pager; systemctl list-timers 
 cap $r/20-services 'for u in end0-irq-core3 usb-irq-core3 diretta-thread-pin disable-eee limit-speed-100m qdisc-pfifo purist-mode-webui purist-mode-auto purist-mode-revert-on-boot diretta_alsa diretta_alsa_target roonbridge; do systemctl show "$u" -p Id,LoadState,UnitFileState,ActiveState --no-pager; echo; done'
 cap $r/20-services 'systemctl cat isolated0.slice isolated1.slice diretta_alsa.service diretta_alsa_target.service 2>&1; for f in /sys/fs/cgroup/isolated*.slice/cpuset.cpus*; do echo "$f: $(cat $f)"; done'
 if id audiolinux >/dev/null 2>&1; then
-  cap $r/20-services 'runuser -u audiolinux -- env XDG_RUNTIME_DIR=/run/user/$(id -u audiolinux) systemctl --user list-unit-files --no-pager; crontab -u audiolinux -l; loginctl show-user audiolinux'
+  cap $r/20-services 'u=$(id -u audiolinux); setpriv --reuid=audiolinux --regid=audiolinux --init-groups env XDG_RUNTIME_DIR=/run/user/$u systemctl --user list-unit-files --no-pager; crontab -u audiolinux -l; loginctl show-user audiolinux'
 fi
 cap $r/20-services 'crontab -l; ls /var/spool/cron /etc/cron.d'
 cap $r/30-network 'ip -br a; ip r; networkctl status --no-pager; cat /etc/hosts /etc/resolv.conf; ip -d link show end0 | head -5'
@@ -89,10 +92,13 @@ if [[ -s $D/fehler.txt ]]; then echo "Hinweis: $(wc -l < "$D/fehler.txt") Befehl
 chmod 0600 "$OUT_BASE/$name.tar.gz"; trap - INT TERM
 nfiles="$(wc -l < "$D/manifest.sha256")"; rm -rf -- "$D"      # nur das eine Archiv behalten
 
-# Kopie fuer den Nutzer: als Nutzer schreiben (root folgt nie einem vom Nutzer gelegten Symlink)
+# Kopie fuer den Nutzer: als Nutzer schreiben (root folgt nie einem vom Nutzer gelegten Symlink).
+# setpriv statt runuser: keine PAM-Sitzung, also kein Eintrag in lastlog (der Snapshot soll nichts am System veraendern)
+as_user() { if command -v setpriv >/dev/null 2>&1; then setpriv --reuid=audiolinux --regid=audiolinux --init-groups "$@"; else runuser -u audiolinux -- "$@"; fi; }
 if id audiolinux >/dev/null 2>&1; then
-  runuser -u audiolinux -- sh -c 'umask 077; d="$HOME/snapshots"; [ ! -L "$d" ] || { echo "WARNUNG: $d ist ein Symlink, Kopie uebersprungen" >&2; exit 1; }; mkdir -p "$d" && cat > "$d/$1"' _ "$name.tar.gz" < "$OUT_BASE/$name.tar.gz" \
-    && copy="Kopie: ~audiolinux/snapshots/$name.tar.gz" || copy="Kopie nach ~audiolinux/snapshots fehlgeschlagen: Archiv aus $OUT_BASE holen"
+  uh="$(getent passwd audiolinux 2>/dev/null | cut -d: -f6)"; uh="${uh:-/home/audiolinux}"
+  as_user sh -c 'umask 077; d="$1/snapshots"; [ ! -L "$d" ] || { echo "WARNUNG: $d ist ein Symlink, Kopie uebersprungen" >&2; exit 1; }; mkdir -p "$d" && cat > "$d/$2"' _ "$uh" "$name.tar.gz" < "$OUT_BASE/$name.tar.gz" \
+    && copy="Kopie: $uh/snapshots/$name.tar.gz" || copy="Kopie nach $uh/snapshots fehlgeschlagen: Archiv aus $OUT_BASE holen"
 else copy="Kein Nutzer audiolinux: Archiv aus $OUT_BASE holen"; fi
 sync                                          # Stromausfall/Omni-Haenger direkt nach dem Lauf darf das Archiv nicht kosten
 echo "Fertig: $OUT_BASE/$name.tar.gz ($(du -h "$OUT_BASE/$name.tar.gz" | cut -f1), ${#ex[@]} Pfade, $nfiles Dateien/Links)"

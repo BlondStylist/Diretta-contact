@@ -9,7 +9,7 @@ made_user=0
 if ! id audiolinux >/dev/null 2>&1 && command -v useradd >/dev/null; then useradd -m -s /bin/bash audiolinux && made_user=1; fi
 cleanup() { rm -rf "$W" /opt/configuration/zz-d /etc/zz-t-* /etc/sysctl.d/zz-t-* /etc/sudoers.d/zz-t-* /etc/ssh/ssh_host_zz_key /tmp/zz-t-escape /home/audiolinux/zz-* /home/audiolinux/snapshots "/etc/sysctl.d/zz t.conf"; (( made_user )) && userdel -r audiolinux >/dev/null 2>&1; }
 trap cleanup EXIT
-ok() { local out; if out="$( ( set +o pipefail; eval "$2" ) 2>&1 )"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; [[ -n $out ]] && head -5 <<<"$out" | sed 's/^/    /'; return 1; fi; }
+ok() { local _o; if _o="$( ( set +o pipefail; eval "$2" ) 2>&1 )"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; [[ -n $_o ]] && head -5 <<<"$_o" | sed 's/^/    /'; return 1; fi; }
 dbg() { printf '%s\n' "$*" | head -12 | sed 's/^/    | /'; }
 snap() { OUT_BASE="$W/out" SAMPLE=0 bash "$here/snapshot.sh" "$@" 2>&1; }
 newest() { ls -t "$W"/out/snapshot-*"$1"*.tar.gz 2>/dev/null | head -1; }
@@ -74,7 +74,7 @@ lauf3() {
 lauf4() {
   mkdir -p /etc/sysctl.d; echo a > /etc/sysctl.d/zz-t-x.conf
   # Minimal-PATH: nur Coreutils, keine Arch-/Pi-Werkzeuge (pacman, systemctl, ethtool, tc, vcgencmd, ...)
-  mkdir "$W/bin"; for c in bash sh tar gzip find xargs sha256sum sort awk df cat ls date hostname mkdir chmod cp chown du wc sleep grep head tail sed stat basename dirname mktemp rm readlink realpath uname id; do
+  mkdir "$W/bin"; for c in bash sh tar gzip find xargs sha256sum sort awk df cat ls date hostname mkdir chmod cp chown du wc sleep grep head tail sed stat basename dirname mktemp rm readlink realpath uname id cut tr diff; do
     p="$(command -v "$c")" && ln -s "$p" "$W/bin/$c"; done
   o="$(PATH="$W/bin" OUT_BASE="$W/min" SAMPLE=0 bash "$here/snapshot.sh" min 2>&1)"; r=$?
   ok "L4 ohne Pi-/Arch-Werkzeuge: Exit 0 und Archiv da" '[[ $r -eq 0 ]] && ls "$W"/min/*.tar.gz'
@@ -95,6 +95,12 @@ lauf4() {
   o="$(snap secret)"; ok "L4 Warnung bei moeglichen Zugangsdaten im Archiv" 'grep -q "Zugangsdaten" <<<"$o" && grep -q zz-secret.conf <<<"$o"'
   mkdir -p /etc/sudoers.d; echo 'x ALL=(ALL) NOPASSWD: /usr/bin/true' > /etc/sudoers.d/zz-t-sudo; rm -f /home/audiolinux/zz-secret.conf
   o="$(snap clean2)"; ok "L4 sudoers NOPASSWD loest keine Fehlwarnung aus" '! grep -q "zz-t-sudo" <<<"$o"'
+  mkdir "$W/nocut"; for c in bash sh tar gzip find xargs sha256sum sort awk df cat ls date mkdir chmod cp du wc sleep grep head tail sed stat basename dirname mktemp rm readlink realpath uname id tr diff; do p="$(command -v "$c")" && ln -s "$p" "$W/nocut/$c"; done
+  o="$(PATH="$W/nocut" OUT_BASE="$W/nc" SAMPLE=0 bash "$here/snapshot.sh" nc 2>&1)"; r=$?
+  ok "L4 fehlendes Pflicht-Werkzeug (cut): Exit 3 mit klarer Meldung, kein Halbarchiv" '[[ $r -eq 3 ]] && grep -q "Fehlende Pflicht-Werkzeuge: cut" <<<"$o" && ! ls "$W"/nc/*.tar.gz'
+  mkdir "$W/nodiff"; for c in bash sh tar gzip sort awk mktemp grep realpath id; do p="$(command -v "$c")" && ln -s "$p" "$W/nodiff/$c"; done
+  snap nd >/dev/null; PATH="$W/nodiff" bash "$here/compare.sh" "$(newest nd)" "$(newest nd)" >/dev/null 2>&1; r1=$?; PATH="$W/nodiff" bash "$here/restore.sh" "$(newest nd)" /etc/hostname >/dev/null 2>&1; r2=$?
+  ok "L4 ohne diff: compare und restore melden das (Exit 3), statt still falsch zu laufen" '[[ $r1 -eq 3 && $r2 -eq 3 ]]'
   bash "$here/compare.sh" /nicht/da.tar.gz /auch/nicht.tar.gz >/dev/null 2>&1; r=$?; ok "L4 compare: fehlende Datei -> Exit 2" '[[ $r -eq 2 ]]'
   A="$(newest clean2)"; bash "$here/compare.sh" "$A" "$A" >/dev/null 2>&1; ok "L4 compare: identisch -> Exit 0" '[[ $? -eq 0 ]]'
   echo changed >> /etc/sysctl.d/zz-t-x.conf; snap c3 >/dev/null; bash "$here/compare.sh" "$A" "$(newest c3)" >/dev/null 2>&1; r=$?; ok "L4 compare: Unterschied -> Exit 1" '[[ $r -eq 1 ]]'

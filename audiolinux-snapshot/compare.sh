@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Vergleicht zwei Snapshots (snapshot-*.tar.gz): stabile Berichte per diff, Dateien per Pruefsumme.
-# Usage: bash compare.sh vorher.tar.gz nachher.tar.gz        Exit: 0 identisch | 1 Unterschiede | 2 Aufruf/Archiv
+# Usage: bash compare.sh vorher.tar.gz nachher.tar.gz        Exit: 0 identisch | 1 Unterschiede | 2 Aufruf/Archiv | 3 Werkzeug fehlt
 set -uo pipefail
+need=(tar gzip diff awk sort mktemp grep); for c in "${need[@]}"; do command -v "$c" >/dev/null 2>&1 || { echo "Fehlendes Werkzeug: $c (Arch: pacman -S diffutils coreutils tar gzip gawk)" >&2; exit 3; }; done
 [[ $# -eq 2 && -f $1 && -f $2 ]] || { echo "Usage: $0 vorher.tar.gz nachher.tar.gz (beide muessen existieren)" >&2; exit 2; }
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT; mkdir "$t/a" "$t/b"
 for i in a b; do src="$1"; [[ $i == b ]] && src="$2"

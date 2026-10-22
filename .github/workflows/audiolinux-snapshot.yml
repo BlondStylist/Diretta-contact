@@ -9,11 +9,13 @@ on:
 jobs:
   shell-tests:
     runs-on: ubuntu-latest
-    container: archlinux:latest      # AudioLinux basiert auf Arch: gleiche Coreutils/util-linux/tar/awk
+    container:
+      image: archlinux:latest        # AudioLinux basiert auf Arch: gleiche Coreutils/util-linux/tar/awk
+      options: --privileged          # erlaubt den tmpfs-Mount fuer den Platz-Test
     steps:
       - uses: actions/checkout@v4
       - name: Werkzeuge installieren
-        run: pacman -Syu --noconfirm --needed shellcheck python procps-ng iproute2 ethtool
+        run: pacman -Syu --noconfirm --needed shellcheck python procps-ng iproute2 ethtool diffutils
       - name: shellcheck
         run: shellcheck -x -S warning audiolinux-snapshot/*.sh audiolinux-snapshot/tests/run-tests.sh
       - name: Tests (Laeufe 2-8)
