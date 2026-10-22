@@ -7,7 +7,7 @@ Alles Gemessene stammt aus den **alten** Images (Kernel 7.1.8-1-rpi). Die neuen 
 ## 1. System
 - Zwei Raspberry Pi 5 (AudioLinux): `diretta-host` (RoonBridge, `diretta_alsa`) und `diretta-target` (`diretta_alsa_target`). Direktverbindung `end0`: Host 172.20.0.1, Target 172.20.0.2. LAN am Host über `enu1`.
 - Strecke Target → 3 kaskadierte VIA-Hubs → iFi Omni USB-Switch → Audiolab 8300CD. Roon Core 192.168.178.26, Musikspeicher ROCK (SSD).
-- Host-IP: .66 → .71 (feste Fritzbox-Zuordnung, 12.09.) → **.75 (DHCP, neues Image, 20.10.)**. Feste Zuordnung für das neue Image offen.
+- Host-IP: .66 → .71 (feste Fritzbox-Zuordnung, 12.09.) → **.75 (neues Image, 20.10.)**. Seit 22.10. ist die Host-IP im Router fest eingetragen (Angabe des Nutzers; die genaue Adresse wurde nicht genannt, aufgezeichnet ist .75).
 - Target-Netzteil iFi iPower Elite 5 V/5 A. Beide Pis mit Erdungskabel (USB-A → PE über Supra DC Blocker MKII, 04.10.), Brummen am Kupfergehäuse danach weg.
 
 ## 2. Aktueller Stand: neue Images = Snyder-Original (live gelesen 13.10. und 20.10.)
@@ -75,7 +75,7 @@ Offene Entscheidungen vom 13.10.: ThredMode 17 und Host-Coalescing 0/0 als A/B-K
 5. Vorher sicherstellen, dass die USB-Kette (Omni) stabil ist; ein Hänger mitten im Update würde die Diagnose erschweren.
 
 ## 7. Offene Punkte
-- Feste IP für den Host im neuen Image; `/etc/hosts` und SSH-Aliase am Laptop angleichen.
+- Host-IP ist im Router fest eingetragen (erledigt); noch prüfen, dass `/etc/hosts` und die SSH-Aliase am Laptop dieselbe Adresse nutzen.
 - `diretta-heal.service` auf dem Host: Herkunft klären. `diretta-nacht.sh` v1.3: `psr`-Spalte reparieren. IPI0-Spitze auf Kern 2 unter Maske 8 untersuchen.
 - Erdungs-Messprogramm (diretta-erdung.sh v1.2) und externe Messungen M0–M2 stehen aus. A/B: ThredMode 17, Host-Coalescing 0/0, qdisc, isolated gegen member.
 - Aufräumen: Root-Passwort ändern, Laptop-Schlüssel in `authorized_keys`, Skripte und Archive des anderen Fensters auf den Pis.
