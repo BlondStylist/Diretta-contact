@@ -9,7 +9,8 @@ made_user=0
 if ! id audiolinux >/dev/null 2>&1 && command -v useradd >/dev/null; then useradd -m -s /bin/bash audiolinux && made_user=1; fi
 cleanup() { rm -rf "$W" /opt/configuration/zz-d /etc/zz-t-* /etc/sysctl.d/zz-t-* /etc/sudoers.d/zz-t-* /etc/ssh/ssh_host_zz_key /tmp/zz-t-escape /home/audiolinux/zz-* /home/audiolinux/snapshots "/etc/sysctl.d/zz t.conf"; (( made_user )) && userdel -r audiolinux >/dev/null 2>&1; }
 trap cleanup EXIT
-ok() { if ( set +o pipefail; eval "$2" ) >/dev/null 2>&1; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; fi; }
+ok() { local out; if out="$( ( set +o pipefail; eval "$2" ) 2>&1 )"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; [[ -n $out ]] && head -5 <<<"$out" | sed 's/^/    /'; return 1; fi; }
+dbg() { printf '%s\n' "$*" | head -12 | sed 's/^/    | /'; }
 snap() { OUT_BASE="$W/out" SAMPLE=0 bash "$here/snapshot.sh" "$@" 2>&1; }
 newest() { ls -t "$W"/out/snapshot-*"$1"*.tar.gz 2>/dev/null | head -1; }
 
@@ -50,7 +51,7 @@ lauf3() {
   rs() { BACKUP_DIR="$W/bak" bash "$here/restore.sh" "$@" 2>&1; }
   o="$(rs "$A" /etc/sysctl.d/zz-t-r.conf)"
   ok "L3 Trockenlauf aendert nichts" '[[ "$(cat /etc/sysctl.d/zz-t-r.conf)" == v2 ]]'
-  ok "L3 Trockenlauf zeigt Unterschied" 'grep -q "^[-+]v" <<<"$o"'
+  ok "L3 Trockenlauf zeigt Unterschied" 'grep -q "^[-+]v" <<<"$o"' || dbg "$o"
   DRY_RUN=0 rs "$A" /etc/sysctl.d/zz-t-r.conf >/dev/null
   ok "L3 DRY_RUN=0 stellt Datei wieder her" '[[ "$(cat /etc/sysctl.d/zz-t-r.conf)" == v1 ]]'
   ok "L3 vorherige Version wurde gesichert" 'grep -rq "^v2$" "$W"/bak/pre-restore-*/etc/sysctl.d/zz-t-r.conf'
@@ -189,7 +190,8 @@ lauf8() {  # Rundreise: aendern -> zurueckspielen -> vergleichen; Snapshot verae
   ok "L8 Vergleich nach Restore: nur die bewusst belassene neue Datei unterscheidet sich" '[[ "$(grep -E "^(CHANGED|REMOVED|ADDED)" <<<"$c" | grep zz-t-rt | tr -s " ")" == "ADDED /etc/zz-t-rt/new.conf" ]]'
   # Snapshot veraendert nichts
   touch "$W/marker"; sleep 1; snap noeffect >/dev/null
-  ok "L8 Snapshot schreibt nichts in /etc, /opt, /boot, /var/lib" '[[ -z "$(find /etc /opt /boot /var/lib -xdev -newer "$W/marker" -type f 2>/dev/null | head -1)" ]]'
+  leak="$(find /etc /opt /boot /var/lib -xdev -newer "$W/marker" -type f 2>/dev/null | head -5)"
+  ok "L8 Snapshot schreibt nichts in /etc, /opt, /boot, /var/lib" '[[ -z "$leak" ]]' || dbg "veraenderte Dateien: $leak"
   # Gesamtszenario: pre -> simulierter Update -> post -> compare -> gezielt zurueck
   mkdir -p /etc/zz-t-up; echo keep > /etc/zz-t-up/keep.conf; echo old > /etc/zz-t-up/set.conf; snap upre >/dev/null; U="$(newest upre)"
   echo "update-wirkung" > /etc/zz-t-up/set.conf; echo n > /etc/zz-t-up/set.conf.pacnew; rm /etc/zz-t-up/keep.conf; sleep 1; snap upost >/dev/null

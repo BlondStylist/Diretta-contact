@@ -28,7 +28,7 @@ for arg in "$@"; do
   fi
   if [[ ${DRY_RUN:-1} != 0 ]]; then
     echo "[Trockenlauf] wuerde zuruecksetzen: $p"
-    d="$(diff -ru -- "$t/x/$rel" "$p" 2>&1 | sed '1,2d' | head -20)"; echo "${d:-  (keine Unterschiede)}"; continue
+    d="$(diff -ru -- "$t/x/$rel" "$p" 2>&1 | grep -vE '^(diff |--- |\+\+\+ )' | head -20)"; echo "${d:-  (keine Unterschiede)}"; continue
   fi
   mkdir -p "$bak$(dirname "$p")"; cp -a -- "$p" "$bak$p" 2>/dev/null
   if tar -xzpf "$t/files.tar.gz" -C / "$rel"; then echo "zurueckgespielt: $p (vorherige Fassung: $bak$p)"; else echo "FEHLER beim Zurueckspielen: $p"; rc=1; fi
