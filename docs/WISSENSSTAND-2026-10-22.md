@@ -101,4 +101,6 @@ Basis: `image-snapshot.sh` auf den Original-Images (Host `diretta-host_v148_5_1-
 - **Bewusster Test, später normalisieren:** Host `setting.inf` `ThredMode=17`, `InfoCycle=180000`, `CycleTime=1800` (Snyder-Original: 16 / 150000 / 1500). Zurücksetzen erst auf Zusage des Nutzers, Dienst-Neustart bei Musik aus.
 - **Purist-Modus Target:** `nsswitch.conf` `hosts: files myhostname`, Original als `.purist-bak`.
 - **Vom Nutzer gewollt:** `/etc/sudoers.d/zz-audiolinux-noauth` (`Defaults:audiolinux !authenticate`, beide Pis), passwortloses sudo bleibt. Pis in passiven Kupfergehäusen, kein Argon.
-- **Offen:** `.pacnew` prüfen (`setting.inf.pacnew`, `rtapp.conf.pacnew`, `rtirqs.conf.pacnew`).
+- **Versionen (25.10.):** beide Pis Kernel 6.18.53-1-rpi, Diretta 148_21-1 (Host `diretta-alsa-daemon/-dkms`, Target `diretta-alsa-target`/`diretta-direct-dkms`), Host-RoonBridge 2.71.1683-1.
+- **`.pacnew` geprüft, nichts übernehmen:** `setting.inf.pacnew` sind generische Paketstandards (`Interface=` leer, `ThredMode=1`, `CycleTime=10000`, `Debug=stdout`); neue Schlüssel `CyclePrio=0`, `DebugTarget=disable`, `disConnectWorkaround=disable` fehlen in der aktiven Datei (Standardwerte, bei Dienst-Warnung nachtragen). `rtapp.conf.pacnew` setzt `APPLICATIONS=""` statt `"syncAlsa RoonBridge"` und würde die RT-Priorität abschalten. `rtirqs.conf.pacnew` nicht beurteilt, irrelevant ohne rtirq.
+- **Ergebnis:** Es ist nichts zurückzuspielen; der Ist-Zustand entspricht dem Menü-Update plus den gewollten Änderungen.
