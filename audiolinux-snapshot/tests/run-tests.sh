@@ -215,6 +215,8 @@ lauf8() {  # Rundreise: aendern -> zurueckspielen -> vergleichen; Snapshot verae
 lauf9() {  # Laptop-Einrichtung: ssh-Config, Schluessel, sicheres Repo-Update (ohne Netz, mit lokalen Git-Repos)
   command -v git >/dev/null && command -v ssh-keygen >/dev/null || { echo "SKIP: git oder ssh-keygen fehlt (Lauf 9)"; return; }
   H="$W/home9"; mkdir -p "$H/.ssh"; printf 'Host alt\n  HostName 192.168.178.66\n  User audiolinux\n' > "$H/.ssh/config"; chmod 644 "$H/.ssh/config"
+  # hermetisch: weder die globale Git-Konfiguration (Commit-Signierung, url-Umschreibung) noch Umgebungsvariablen des Aufrufers duerfen die Tests beeinflussen
+  export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_COUNT=0
   hs() { HOME="$H" bash "$here/laptop-setup.sh" "$@" 2>&1 </dev/null; }
   o="$(hs --config)"
   ok "L9 config: Block steht ganz oben (vor dem alten Eintrag), alter Eintrag bleibt erhalten" '[[ "$(grep -n "BEGIN diretta" "$H/.ssh/config" | cut -d: -f1)" == 1 ]] && grep -q "^Host alt" "$H/.ssh/config"'
