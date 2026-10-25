@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Werkzeuge installieren
-        run: pacman -Syu --noconfirm --needed shellcheck python procps-ng iproute2 ethtool diffutils git openssh
+        run: pacman -Syu --noconfirm --needed shellcheck python procps-ng iproute2 ethtool diffutils git openssh util-linux e2fsprogs dosfstools
       - name: shellcheck
         run: shellcheck -x -S warning audiolinux-snapshot/*.sh audiolinux-snapshot/tests/run-tests.sh
       - name: Tests (Laeufe 2-8)

@@ -7,7 +7,7 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; W="$(mktemp -d)"; pass=0; fail=0
 made_user=0
 if ! id audiolinux >/dev/null 2>&1 && command -v useradd >/dev/null; then useradd -m -s /bin/bash audiolinux && made_user=1; fi
-cleanup() { rm -rf "$W" /opt/configuration/zz-d /etc/zz-t-* /etc/sysctl.d/zz-t-* /etc/sudoers.d/zz-t-* /etc/ssh/ssh_host_zz_key /tmp/zz-t-escape /home/audiolinux/zz-* /home/audiolinux/snapshots "/etc/sysctl.d/zz t.conf"; (( made_user )) && userdel -r audiolinux >/dev/null 2>&1; }
+cleanup() { rm -rf "$W" /opt/configuration/zz-d /etc/zz-t-* /etc/sysctl.d/zz-t-* /etc/sudoers.d/zz-t-* /etc/ssh/ssh_host_zz_key /tmp/zz-t-escape /etc/zz-i10* /home/audiolinux/zz-* /home/audiolinux/snapshots "/etc/sysctl.d/zz t.conf"; (( made_user )) && userdel -r audiolinux >/dev/null 2>&1; }
 trap cleanup EXIT
 ok() { local _o; if _o="$( ( set +o pipefail; eval "$2" ) 2>&1 )"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; [[ -n $_o ]] && head -5 <<<"$_o" | sed 's/^/    /'; return 1; fi; }
 dbg() { printf '%s\n' "$*" | head -12 | sed 's/^/    | /'; }
@@ -255,5 +255,84 @@ lauf9() {  # Laptop-Einrichtung: ssh-Config, Schluessel, sicheres Repo-Update (o
   unset REPO_SPEC
   o="$(hs --gibtsnicht)"; r=$?; ok "L9 unbekannte Option: Exit 2" '[[ $r -eq 2 ]]'
 }
-for l in ${1:-all}; do case "$l" in all) lauf2; lauf3; lauf4; lauf5; lauf6; lauf7; lauf8; lauf9;; lauf2) lauf2;; lauf3) lauf3;; lauf4) lauf4;; lauf5) lauf5;; lauf6) lauf6;; lauf7) lauf7;; lauf8) lauf8;; lauf9) lauf9;; esac; done
+lauf10() {  # Original-Image einlesen: gleiches Archivformat wie snapshot.sh, Vergleich/Restore gegen das Original
+  local R="$W/i10/root" BO="$W/i10/boot" I="$W/i10/out" blk a b
+  mkdir -p "$R/etc/systemd" "$R/etc/ssh" "$R/opt/configuration" "$R/home/audiolinux/.ssh" "$BO" "$I"
+  echo "a=1" > "$R/etc/zz-i10.conf"; ln -s zz-i10.conf "$R/etc/zz-i10-link"; echo geheim > "$R/etc/shadow"; echo HK > "$R/etc/ssh/ssh_host_zz_key"
+  echo "ThredMode=16" > "$R/opt/configuration/setting.inf"; echo 'echo hi' > "$R/home/audiolinux/zz-run.sh"; echo cfg > "$R/home/audiolinux/.ssh/config"
+  echo KEY > "$R/home/audiolinux/.ssh/id_ed25519"; head -c 300000 /dev/zero > "$R/home/audiolinux/zz-big.conf"
+  echo "console=tty1" > "$BO/cmdline.txt"; echo "arm_64bit=1" > "$BO/config.txt"
+  isn() { OUT_BASE="$I" bash "$here/image-snapshot.sh" "$@" 2>&1; }
+  for blk in paths excl manifest; do
+    ok "L10 Block '$blk' in snapshot.sh und image-snapshot.sh wortgleich" \
+      '[[ -n "$(sed -n "/^# --- $blk-start/,/^# --- $blk-ende/p" "$here/snapshot.sh")" && "$(sed -n "/^# --- $blk-start/,/^# --- $blk-ende/p" "$here/snapshot.sh")" == "$(sed -n "/^# --- $blk-start/,/^# --- $blk-ende/p" "$here/image-snapshot.sh")" ]]'
+  done
+  o="$(isn --wurzel "$R" --boot "$BO" orig/1)"; r=$?; a="$(ls -t "$I"/snapshot-image-orig_1-*.tar.gz 2>/dev/null | head -1)"
+  ok "L10 wurzel: Exit 0, Archiv da, Label bereinigt, 0600" '[[ $r -eq 0 && -s "$a" && "$(stat -c %a "$a")" == 600 ]]'
+  mkdir "$W/i10/x"; tar -xzf "$a" -C "$W/i10/x" --strip-components=1
+  ok "L10 Archiv: files.tar.gz + manifest.sha256, KEIN report-Ordner" '[[ -f "$W/i10/x/files.tar.gz" && -f "$W/i10/x/manifest.sha256" && ! -d "$W/i10/x/report" ]]'
+  ok "L10 Archiv: Einstellungen und Boot-Dateien enthalten" 'tar -tzf "$W/i10/x/files.tar.gz" | grep -q "etc/zz-i10.conf" && tar -tzf "$W/i10/x/files.tar.gz" | grep -q "boot/cmdline.txt" && tar -tzf "$W/i10/x/files.tar.gz" | grep -q "opt/configuration/setting.inf"'
+  ok "L10 Archiv: shadow, Hostschluessel, privater Schluessel, grosse Datei fehlen" '! tar -tzf "$W/i10/x/files.tar.gz" | grep -qE "etc/shadow|ssh_host_zz_key|id_ed25519|zz-big.conf"'
+  ok "L10 Manifest: Datei und Symlink mit Pfad ab /" 'grep -q "  /etc/zz-i10.conf$" "$W/i10/x/manifest.sha256" && grep -q "  /etc/zz-i10-link$" "$W/i10/x/manifest.sha256" && grep -q "  /boot/config.txt$" "$W/i10/x/manifest.sha256"'
+  ok "L10 Quelle ist vermerkt" 'grep -q "Quelle:" "$W/i10/x/QUELLE.txt"'
+  echo "a=2" > "$R/etc/zz-i10.conf"; echo neu > "$R/etc/zz-i10-neu.conf"; sleep 1
+  isn --wurzel "$R" --boot "$BO" orig/1 >/dev/null; b="$(ls -t "$I"/snapshot-image-orig_1-*.tar.gz | head -1)"
+  ok "L10 zweiter Lauf: eindeutiger Archivname (nichts ueberschrieben)" '[[ "$a" != "$b" && -s "$a" && -s "$b" ]]'
+  mkdir "$W/i10/clk"; printf '#!/bin/sh\n[ "$1" = "+%%Y%%m%%d-%%H%%M%%S" ] && echo 20260101-000000 || exec %s "$@"\n' "$(command -v date)" > "$W/i10/clk/date"; chmod +x "$W/i10/clk/date"
+  PATH="$W/i10/clk:$PATH" isn --wurzel "$R" gleich >/dev/null; PATH="$W/i10/clk:$PATH" isn --wurzel "$R" gleich >/dev/null
+  ok "L10 zwei Laeufe in derselben Sekunde ueberschreiben sich nicht (festgesetzte Uhr)" '[[ "$(ls "$I" | grep -c "^snapshot-image-gleich-20260101-000000.*tar.gz$")" == 2 ]]'
+  cmp="$(bash "$here/compare.sh" "$a" "$b")"; r=$?
+  ok "L10 compare Image gegen Image: CHANGED/ADDED, Berichte uebersprungen, Exit 1" '[[ $r -eq 1 ]] && grep -q "CHANGED /etc/zz-i10.conf" <<<"$cmp" && grep -q "ADDED   /etc/zz-i10-neu.conf" <<<"$cmp" && grep -q "uebersprungen" <<<"$cmp"'
+  # Original (a) gegen den echten Pi-Snapshot: gleiches Format, Dateivergleich funktioniert
+  echo live > /etc/sysctl.d/zz-t-live.conf 2>/dev/null || { mkdir -p /etc/sysctl.d; echo live > /etc/sysctl.d/zz-t-live.conf; }
+  snap live10 >/dev/null; L="$(newest live10)"
+  cmp="$(bash "$here/compare.sh" "$a" "$L")"; r=$?
+  ok "L10 compare Original gegen Pi-Snapshot: kein Formatfehler (Exit 0/1), Unterschied sichtbar" '[[ $r -le 1 ]] && grep -q "ADDED   /etc/sysctl.d/zz-t-live.conf" <<<"$cmp"'
+  # Zurueckspielen aus dem Original (Trockenlauf aendert nichts)
+  echo "live=1" > /etc/zz-i10.conf
+  o="$(bash "$here/restore.sh" "$a" /etc/zz-i10.conf 2>&1)"
+  ok "L10 restore aus Image-Archiv (Trockenlauf): zeigt Unterschied, aendert nichts" 'grep -q "live=1" "/etc/zz-i10.conf" && grep -qE "^[-+]" <<<"$o"'
+  o="$(DRY_RUN=0 BACKUP_DIR="$W/bk10" bash "$here/restore.sh" "$a" /etc/zz-i10.conf 2>&1)"
+  ok "L10 restore aus Image-Archiv (echt): Original-Inhalt zurueck, Sicherung angelegt" '[[ "$(cat /etc/zz-i10.conf)" == "a=1" ]] && ls "$W"/bk10/pre-restore-* >/dev/null'
+  rm -f /etc/zz-i10.conf
+  # Zugangsdaten-Warnung
+  echo "password=abc123" > "$R/opt/configuration/zz-cred.conf"
+  o="$(isn --wurzel "$R" cred)"
+  ok "L10 Zugangsdaten-Warnung bei password= in Dateien" 'grep -q "WARNUNG" <<<"$o"'
+  rm -f "$R/opt/configuration/zz-cred.conf"
+  # Aufruffehler
+  o="$(isn --wurzel "$W/gibtsnicht")"; r=$?; ok "L10 fehlendes Wurzelverzeichnis: Exit 2" '[[ $r -eq 2 ]]'
+  o="$(isn)"; r=$?; ok "L10 ohne Argument: Exit 2 und Usage" '[[ $r -eq 2 ]] && grep -q Aufruf <<<"$o"'
+  o="$(isn --gibtsnicht)"; r=$?; ok "L10 unbekannte Option: Exit 2" '[[ $r -eq 2 ]]'
+  mkdir -p "$W/i10/leer"; o="$(isn --wurzel "$W/i10/leer")"; r=$?; ok "L10 leeres Verzeichnis: Exit 1 statt leerem Archiv" '[[ $r -eq 1 ]]'
+  o="$(isn --hilfe)"; r=$?; ok "L10 --hilfe: Exit 0" '[[ $r -eq 0 ]] && grep -q "image-snapshot" <<<"$o"'
+  # Suche
+  mkdir -p "$W/i10/dl/sub"; truncate -s 3M "$W/i10/dl/sub/audiolinux-host.img"; truncate -s 1M "$W/i10/dl/klein.img"; echo x > "$W/i10/dl/text.txt"
+  o="$(SUCHPFADE="$W/i10/dl" MIN_KB=2000 bash "$here/image-snapshot.sh" --suche 2>&1)"; r=$?
+  ok "L10 --suche findet Image, ignoriert zu kleine Dateien und Text" '[[ $r -eq 0 ]] && grep -q "audiolinux-host.img" <<<"$o" && ! grep -q "klein.img" <<<"$o" && ! grep -q "text.txt" <<<"$o"'
+  o="$(SUCHPFADE="$W/i10/dl" MIN_KB=999999 bash "$here/image-snapshot.sh" --suche 2>&1)"; r=$?
+  ok "L10 --suche ohne Treffer: Exit 1 und Hinweis" '[[ $r -eq 1 ]] && grep -q "Keine Images" <<<"$o"'
+  # Echtes Image (Loop-Mount, nur lesend): braucht sfdisk, mkfs.ext4, mkfs.vfat, losetup
+  local c fehlt=0; for c in sfdisk mkfs.ext4 mkfs.vfat losetup unshare truncate dd; do command -v "$c" >/dev/null 2>&1 || fehlt=1; done
+  if (( fehlt )); then echo "    (L10 Image-Test uebersprungen: Werkzeug fehlt)"; return 0; fi
+  local IMG="$W/i10/test.img" P1="$W/i10/p1" P2="$W/i10/p2"
+  truncate -s 40M "$P1"; mkfs.vfat -q "$P1" >/dev/null 2>&1; truncate -s 100M "$P2"; mkfs.ext4 -q -d "$R" "$P2" >/dev/null 2>&1
+  truncate -s $(( (2048 + 81920 + 204800) * 512 )) "$IMG"
+  printf 'label: dos\nunit: sectors\n\nstart=2048, size=81920, type=c\nstart=83968, size=204800, type=83\n' | sfdisk -q "$IMG" >/dev/null 2>&1
+  dd if="$P1" of="$IMG" bs=512 seek=2048 conv=notrunc status=none; dd if="$P2" of="$IMG" bs=512 seek=83968 conv=notrunc status=none
+  ( unshare -m --propagation private bash -c 'mkdir -p "$1/m" && mount -o loop,offset=$((2048*512)),sizelimit=$((81920*512)) "$2" "$1/m" && cp "$3"/cmdline.txt "$3"/config.txt "$1/m/"' _ "$W/i10" "$IMG" "$BO" ) >/dev/null 2>&1
+  local sum0; sum0="$(sha256sum "$IMG" | cut -c1-64)"
+  o="$(isn "$IMG" imgtest)"; r=$?; a="$(ls -t "$I"/snapshot-image-imgtest-*.tar.gz 2>/dev/null | head -1)"
+  if [[ $r -ne 0 && $o == *"mount"* ]]; then echo "    (L10 Loop-Mount hier nicht moeglich, Image-Test uebersprungen)"; dbg "$o"; return 0; fi
+  ok "L10 echtes Image: Exit 0 und Archiv" '[[ $r -eq 0 && -s "$a" ]]'
+  ok "L10 echtes Image: Inhalt wie Verzeichnis-Modus (Datei, Symlink, setting.inf, Boot)" 'm="$(tar -xzOf "$a" --wildcards "*/manifest.sha256")"; grep -q "  /etc/zz-i10.conf$" <<<"$m" && grep -q "  /etc/zz-i10-link$" <<<"$m" && grep -q "  /opt/configuration/setting.inf$" <<<"$m" && { ! grep -q "^vfat" /proc/filesystems || grep -q "  /boot/cmdline.txt$" <<<"$m"; }'
+  ok "L10 echtes Image: shadow nicht im Archiv" '! tar -xzOf "$a" --wildcards "*/files.tar.gz" | tar -tz | grep -q etc/shadow'
+  ok "L10 echtes Image: Datei unveraendert (Pruefsumme gleich)" '[[ "$(sha256sum "$IMG" | cut -c1-64)" == "$sum0" ]]'
+  ok "L10 echtes Image: nach dem Lauf nichts gemountet" '! grep -q "$W/i10" /proc/mounts'
+  gzip -k "$IMG"; o="$(MIN_FREI_GB=0 isn "$IMG.gz" gz --cache "$W/i10/cache")"; r=$?
+  ok "L10 komprimiertes Image (.img.gz): Exit 0, Cache wird aufgeraeumt" '[[ $r -eq 0 ]] && ! ls "$W"/i10/cache/*.img >/dev/null 2>&1'
+  o="$(isn "$W/i10/gibtsnicht.img")"; r=$?; ok "L10 fehlendes Image: Exit 1" '[[ $r -eq 1 ]]'
+  head -c 4096 /dev/urandom > "$W/i10/kaputt.img"; o="$(isn "$W/i10/kaputt.img")"; r=$?; ok "L10 Image ohne Partitionstabelle: Exit 1" '[[ $r -eq 1 ]]'
+}
+for l in ${1:-all}; do case "$l" in all) lauf2; lauf3; lauf4; lauf5; lauf6; lauf7; lauf8; lauf9; lauf10;; lauf2) lauf2;; lauf3) lauf3;; lauf4) lauf4;; lauf5) lauf5;; lauf6) lauf6;; lauf7) lauf7;; lauf8) lauf8;; lauf9) lauf9;; lauf10) lauf10;; esac; done
 echo "bestanden: $pass, fehlgeschlagen: $fail"; (( fail == 0 ))

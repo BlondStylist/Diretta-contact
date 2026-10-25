@@ -22,6 +22,7 @@ Host diretta-target
   ProxyJump diretta-host
 ```
 - Die beiden Original-Images (Host, Target) auf dem Laptop prüfen und die Prüfsummen notieren: `sha256sum <image>`. Sie sind der Rückweg per SD-Karte.
+- Original-Images finden und als Referenz einlesen (nur lesend): `sudo bash audiolinux-snapshot/image-snapshot.sh --suche`, dann `sudo bash audiolinux-snapshot/image-snapshot.sh PFAD host-original` (und `target-original`). Ergebnis: `~/snapshots/snapshot-image-*.tar.gz`, vergleichbar mit `compare.sh`. Ein Update ist laut Nutzer schon erfolgt (beide Pis Kernel 6.18.53-1-rpi); ein Vorher-Snapshot der Pis existiert nicht, das Original-Image ist deshalb die Vergleichsbasis.
 
 ### 1b. Prüfkette vor dem Update (empfohlen)
 `audit-alles.sh` aus dem Repo `diretta-werkzeuge` (privat) vereint die Audit-Kette der Python-Werkzeuge mit den Tests dieser Snapshot-Werkzeuge und wiederholt sie in Runden, bis sie sauber ist. Es spricht nie mit den Pis; die Bash-Suite läuft in einer Wegwerf-Sandbox (Overlay-Mount), nichts bleibt im System zurück.

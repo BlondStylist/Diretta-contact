@@ -84,17 +84,22 @@ cap $v/recent-files 'find /etc /opt /usr/local /home/audiolinux -xdev -type f -m
 cap $v/journal 'journalctl -b -p warning --no-pager | tail -150; journalctl -u diretta_alsa_target -b --no-pager | grep -iE "licen|valid|ReleaseNo|version|certified|MTU" | tail -20'
 
 # --- Dateien: ganz /etc (ohne Geheimnisse/Regenerierbares) + gezielte Pfade ---
+# --- paths-start
 paths=(/etc /var/spool/cron /opt/configuration /opt/scripts /opt/diretta-alsa /opt/diretta-alsa-target "$b/cmdline.txt" "$b/config.txt"
   /home/audiolinux/.ssh/config /home/audiolinux/.ssh/authorized_keys /home/audiolinux/.config/systemd /home/audiolinux/.bashrc /home/audiolinux/.bash_profile)
+# --- paths-ende
 while IFS= read -r -d '' f; do paths+=("$f"); done < <(find /home/audiolinux -maxdepth 2 -type f \( -name '*.sh' -o -name '*.py' -o -name '*.conf' \) -size -200k -not -path '*/.cache/*' -not -path '*/snapshots/*' -print0 2>/dev/null)
 ex=(); for p in "${paths[@]}"; do [[ -e $p ]] && ex+=("${p#/}"); done
+# --- excl-start
 excl=(--exclude='etc/shadow*' --exclude='etc/gshadow*' --exclude='etc/ssh/ssh_host_*' --exclude='etc/ssl/private' --exclude='etc/pacman.d/gnupg'
   --exclude='etc/ca-certificates/extracted' --exclude='etc/ssl/certs' --exclude='etc/ld.so.cache' --exclude='etc/udev/hwdb.bin' --exclude='etc/*-'
   --exclude='*.o' --exclude='.git' --exclude='*.ko' --exclude='*.log')
+# --- excl-ende
 tar -czpf "$D/files.tar.gz" --ignore-failed-read "${excl[@]}" -C / "${ex[@]}" 2>/dev/null
 (( $? <= 1 )) || { echo "FEHLER: files.tar.gz unvollstaendig (Platz?)" >&2; exit 5; }   # 1 = Datei aenderte sich, ok
 
 # Manifest aus dem Archiv selbst (Dateien + Symlink-Ziele); gleichzeitig Zugangsdaten-Scan
+# --- manifest-start
 sx="$(mktemp -d)"; tar -xzf "$D/files.tar.gz" -C "$sx" --no-same-owner 2>/dev/null
 hits="$(grep -rIiE 'BEGIN [A-Z ]*PRIVATE KEY|(password|passwd|secret|token|api[_-]?key)[[:space:]]*[=:][[:space:]]*[^[:space:]]+' "$sx" 2>/dev/null | grep -v NOPASSWD | cut -d: -f1 | sort -u | sed "s|^$sx||")"
 [[ -n $hits ]] && { echo "$hits" > "$D/WARNUNG-zugangsdaten.txt"; echo "WARNUNG: moegliche Zugangsdaten in Dateien (Archiv privat halten):"; echo "$hits"; }
@@ -102,6 +107,7 @@ hits="$(grep -rIiE 'BEGIN [A-Z ]*PRIVATE KEY|(password|passwd|secret|token|api[_
   ( cd "$sx" && find . -type l -print0 | while IFS= read -r -d '' l; do printf '%s  %s\n' "$(readlink "$l" | sha256sum | cut -c1-64)" "$l"; done )
 } | sed -E 's#^([0-9a-f]{64}  )\./#\1/#' | sort -k2 > "$D/manifest.sha256"
 rm -rf -- "$sx"; sx=""
+# --- manifest-ende
 
 if [[ -s $D/fehler.txt ]]; then echo "Hinweis: $(wc -l < "$D/fehler.txt") Befehle mit Fehler (fehlende Tools sind normal), z. B.:"; head -6 "$D/fehler.txt"; fi
 ( cd "$OUT_BASE" && tar -czf "$name.tar.gz" "$name" ) || { echo "FEHLER: Archiv konnte nicht erstellt werden" >&2; exit 5; }

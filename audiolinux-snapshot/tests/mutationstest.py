@@ -55,6 +55,12 @@ M = [
     ("schluessel-wird-ueberschrieben", "laptop-setup.sh", 'if [ -f "$KEY" ]; then echo "  vorhanden', 'if false; then echo "  vorhanden', ["lauf9"]),
     ("repo-ohne-rueckfrage-stash", "laptop-setup.sh", '[ "$JA" -eq 1 ] && return 0', "return 0", ["lauf9"]),
     ("check-meldet-fehlende-nicht", "snapshot.sh", "exit $(( fehlt ? 3 : 0 ))", "exit 0", ["lauf4"]),
+    ("image-rw-gemountet", "image-snapshot.sh", "mount -t ext4 -o ro,noload,loop", "mount -t ext4 -o rw,loop", ["lauf10"]),
+    ("image-excl-ohne-shadow", "image-snapshot.sh", "--exclude='etc/shadow*' ", "", ["lauf10"]),
+    ("image-pfadliste-abweichend", "image-snapshot.sh", "paths=(/etc /var/spool", "paths=(/etc/systemd /var/spool", ["lauf10"]),
+    ("image-name-nicht-eindeutig", "image-snapshot.sh", "while [[ -e \"$OUT_BASE/$name\" ||", "while false &&", ["lauf10"]),
+    ("image-suche-ohne-mindestgroesse", "image-snapshot.sh", '-size +"${MIN_KB:-200000}"k', "-size +0k", ["lauf10"]),
+    ("compare-ohne-image-toleranz", "compare.sh", "if [[ -d $t/a/report && -d $t/b/report ]]; then", "if true; then", ["lauf10"]),
 ]
 
 
