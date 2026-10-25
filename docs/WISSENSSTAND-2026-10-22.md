@@ -92,3 +92,12 @@ Offene Entscheidungen vom 13.10.: ThredMode 17 und Host-Coalescing 0/0 als A/B-K
 - **Ergänzt (PR diretta-werkzeuge#1):** `audit-alles.sh` vereint diese Kette mit den Bash-Werkzeugen (`audiolinux-snapshot`) und wiederholt sie in Runden bis sauber. Die Bash-Suite läuft in einer Overlay-Sandbox. `tools/mutationstest.py` arbeitet jetzt auf einer Kopie. Der Läufer hat eigene Tests (18).
 - **Nachweis:** Abschlusslauf über den Endstand: 2 Runden in Folge sauber (statisch, selftest, chaos, preflight, laeufer, bash-statisch, bash-suite, mutation-bash 21/21); davor mutation-py 59/59. CI beider Repos grün (Arch-Container bzw. Audit-Kette inkl. CodeQL).
 - **Grenze:** Alles lief ohne Pis. Die Pi-spezifischen Befehle der Snapshot-Werkzeuge (`vcgencmd`, `ethtool`, `pacman`, Cpuset …) sind erst beim ersten Lauf auf dem Pi geprüft; `snapshot.sh --check` zeigt dort in Sekunden, was fehlt.
+
+## 10. Vergleich Original-Image gegen Ist-Zustand (25.10.2026)
+Basis: `image-snapshot.sh` auf den Original-Images (Host `diretta-host_v148_5_1-v530-mtu10222-roon`, Target `diretta-target_v148_1_4-v530-mtu10222`, Ordner „mtu900 images 14.09.2026“) gegen `snapshot.sh ist-nach-update` (25.10., Kernel 6.18.53-1-rpi). Ein Vorher-Snapshot der Pis existiert nicht.
+
+- **Vom Menü-Update, behalten:** `cmdline.txt` (neu `isolcpus=2,3 nohz=on workqueue.unbound_cpus=0,1`), `isolated.conf` (tune-server, IRQ-Listen neu: Host `103`, Target `133 128 103`), `rtapp.conf`, `hqplayer_input.service` (ohne Slice/FIFO 80), alle `/opt/scripts/*` (nie zurückspielen), neuere Diretta-Binaries.
+- **Absichtlich vom Nutzer entfernt:** Argon-Overlay/-Dienst (Pis ohne Argon-Gehäuse, passive Kühlung, Temperatur unauffällig), IR-Fernbedienung auf dem Host (`gpio-ir`, ir-keymap, roon-ir-remote, Flirc).
+- **Bewusster Test, später normalisieren:** Host `setting.inf` `ThredMode=17`, `InfoCycle=180000`, `CycleTime=1800` (Snyder-Original: 16 / 150000 / 1500). Zurücksetzen erst auf Zusage des Nutzers, Dienst-Neustart bei Musik aus.
+- **Purist-Modus Target:** `nsswitch.conf` `hosts: files myhostname`, Original als `.purist-bak`.
+- **Offen:** `/etc/sudoers.d/zz-audiolinux-noauth` (`Defaults:audiolinux !authenticate`, beide Pis): Herkunft klären; Original hatte `Defaults rootpw`. `.pacnew` prüfen (`setting.inf.pacnew`, `rtapp.conf.pacnew`, `rtirqs.conf.pacnew`).
