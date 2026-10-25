@@ -100,4 +100,5 @@ Basis: `image-snapshot.sh` auf den Original-Images (Host `diretta-host_v148_5_1-
 - **Absichtlich vom Nutzer entfernt:** Argon-Overlay/-Dienst (Pis ohne Argon-Gehäuse, passive Kühlung, Temperatur unauffällig), IR-Fernbedienung auf dem Host (`gpio-ir`, ir-keymap, roon-ir-remote, Flirc).
 - **Bewusster Test, später normalisieren:** Host `setting.inf` `ThredMode=17`, `InfoCycle=180000`, `CycleTime=1800` (Snyder-Original: 16 / 150000 / 1500). Zurücksetzen erst auf Zusage des Nutzers, Dienst-Neustart bei Musik aus.
 - **Purist-Modus Target:** `nsswitch.conf` `hosts: files myhostname`, Original als `.purist-bak`.
-- **Offen:** `/etc/sudoers.d/zz-audiolinux-noauth` (`Defaults:audiolinux !authenticate`, beide Pis): Herkunft klären; Original hatte `Defaults rootpw`. `.pacnew` prüfen (`setting.inf.pacnew`, `rtapp.conf.pacnew`, `rtirqs.conf.pacnew`).
+- **Vom Nutzer gewollt:** `/etc/sudoers.d/zz-audiolinux-noauth` (`Defaults:audiolinux !authenticate`, beide Pis), passwortloses sudo bleibt. Pis in passiven Kupfergehäusen, kein Argon.
+- **Offen:** `.pacnew` prüfen (`setting.inf.pacnew`, `rtapp.conf.pacnew`, `rtirqs.conf.pacnew`).
