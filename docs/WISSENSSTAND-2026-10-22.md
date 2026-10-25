@@ -85,3 +85,10 @@ Offene Entscheidungen vom 13.10.: ThredMode 17 und Host-Coalescing 0/0 als A/B-K
 - Snyders Zahlen unterscheiden sich je nach Abschnitt (800/80000, 514/51400, Image 1500/150000). Maßgeblich ist der Image-Stand; der Guide-Abschnitt ist noch zu prüfen.
 - Die Release-Notes-Abfrage lieferte keine Datumsangaben und nur Auszüge ab Menü 540; Details zu Menü 545 und neuer sind nicht verifiziert.
 - Der Roon-Community-Thread zu Diretta-Einstellungen war nur teilweise lesbar (Diskussion über Nutzen von Diretta bei Async-USB, keine belastbaren Einstellwerte). Kein Messergebnis daraus übernommen.
+
+## 9. Prüfkette ("Super-Skript") – Stand 25.10.2026
+- **Fundort:** Repo `BlondStylist/diretta-werkzeuge` (privat): `diretta-super.py` (passive Gesamtaufnahme, 7 Module), `diretta-qdisc-ab.py`, `diretta-latenz.py`, `tests/test_chaos.py`, `tools/mutationstest.py` und die CI `audit.yml` (py_compile, pyflakes, ruff, bandit, mypy, vulture, Selbsttest mit Abdeckung, Chaos-Tests, Preflight, Mutationstests, CodeQL).
+- **Ausgangslage (lokal gemessen):** statische Kette sauber; Selbsttests 132 / 83 / 32; Chaos-Tests 31; Mutanten 18 / 20 / 21 erkannt. Abdeckung diretta-super 51 %, qdisc-ab 90 %, latenz 87 %: die Lücke liegt in diretta-super.
+- **Ergänzt (PR diretta-werkzeuge#1):** `audit-alles.sh` vereint diese Kette mit den Bash-Werkzeugen (`audiolinux-snapshot`) und wiederholt sie in Runden bis sauber. Die Bash-Suite läuft in einer Overlay-Sandbox. `tools/mutationstest.py` arbeitet jetzt auf einer Kopie. Der Läufer hat eigene Tests (18).
+- **Nachweis:** Abschlusslauf über den Endstand: 2 Runden in Folge sauber (statisch, selftest, chaos, preflight, laeufer, bash-statisch, bash-suite, mutation-bash 21/21); davor mutation-py 59/59. CI beider Repos grün (Arch-Container bzw. Audit-Kette inkl. CodeQL).
+- **Grenze:** Alles lief ohne Pis. Die Pi-spezifischen Befehle der Snapshot-Werkzeuge (`vcgencmd`, `ethtool`, `pacman`, Cpuset …) sind erst beim ersten Lauf auf dem Pi geprüft; `snapshot.sh --check` zeigt dort in Sekunden, was fehlt.
