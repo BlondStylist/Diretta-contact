@@ -21,10 +21,21 @@ Host diretta-target
 ```
 - Die beiden Original-Images (Host, Target) auf dem Laptop prüfen und die Prüfsummen notieren: `sha256sum <image>`. Sie sind der Rückweg per SD-Karte.
 
+### 1b. Prüfkette vor dem Update (empfohlen)
+`audit-alles.sh` aus dem Repo `diretta-werkzeuge` (privat) vereint die Audit-Kette der Python-Werkzeuge mit den Tests dieser Snapshot-Werkzeuge und wiederholt sie in Runden, bis sie sauber ist. Es spricht nie mit den Pis; die Bash-Suite läuft in einer Wegwerf-Sandbox (Overlay-Mount), nichts bleibt im System zurück.
+```bash
+git clone https://github.com/BlondStylist/diretta-werkzeuge.git ~/diretta-werkzeuge     # privat: Anmeldung per gh oder SSH-Schlüssel
+cd ~/diretta-werkzeuge && git fetch origin && git checkout claude/audit-alles && git pull   # bis PR #1 gemergt ist
+sudo -v                                       # Passwort einmal eingeben; die Sandbox braucht sudo
+./audit-alles.sh --tief --extra '~/diretta/selftest-tools.sh'   # --extra nur, wenn die alten Skripte dort liegen
+```
+Erwartet: Exit 0 und „ERGEBNIS: sauber“; Dauer mit `--tief` ca. 40 Minuten, ohne `--tief` ca. 10. Bericht und Logs: `~/diretta-werkzeuge/audit-berichte/<zeit>/`. Die Snapshot-Werkzeuge findet das Skript unter `~/Diretta-contact/audiolinux-snapshot`. Anleitung: `~/diretta-werkzeuge/AUDIT-ALLES.md`.
+
 ## 2. Startprompt für Claude im Ubuntu-Fenster
 > Lies zuerst `docs/UEBERGABE-LAPTOP.md` und `docs/WISSENSSTAND-2026-10-22.md` im Repo. Du übernimmst die Arbeit aus der Cloud-Sitzung. Ziel: AudioLinux-Menü- und Kernel-Update auf meinem Diretta Host (192.168.178.75) und Target (172.20.0.2 über den Host), danach gilt der reine Snyder-Image-Stand. Halte dich an den Phasenplan und die Regeln in der Übergabe, arbeite in Phase 0-2 nur lesend und halte vor Phase 3 an. Sprich Deutsch, kurz und mit copy-paste-fähigen Befehlen.
 
 ## 3. Phasenplan (jede Phase endet mit Bericht, Freigabe durch den Nutzer)
+- **Phase 0a, Prüfkette:** `./audit-alles.sh` (siehe 1b) einmal laufen lassen; bei Fehlern erst Ursache klären und beheben, dann weiter. Der Bericht gehört in die Übergabe.
 - **Phase 0, Laptop prüfen:** Klon aktuell, Skripte vorhanden, `ssh diretta-host hostname` und `ssh diretta-target hostname` funktionieren. Sicherstellen, dass keine Musik läuft. Prüfen, dass die USB-Kette stabil ist (Target: DAC sichtbar, `vcgencmd get_throttled` = `0x0`).
 - **Phase 1, Befund lesend:** Auf beiden Pis `uname -r`, Menü- und Diretta-Version, `systemctl --failed`, `setting.inf`. Erwartet laut Aufzeichnung: Kernel 6.18.50-2-rpi, Host ThredMode=16, CycleTime=1500, InfoCycle=150000, FlexCycle=enable; MTU 10222; Diretta 148_1.
 - **Phase 2, Snapshot vor dem Update:** `audiolinux-snapshot/snapshot.sh` per scp auf beide Pis (ohne Wiedergabe), `sudo bash snapshot.sh pre-update` (Passwort tippt der Nutzer), Archive zurückholen nach `~/snapshots/`. Die Zeilen unter „Befehle mit Fehler“ (`fehler.txt`) auswerten und das Skript falls nötig korrigieren (mit Tests). **Stopp: Freigabe einholen.**
