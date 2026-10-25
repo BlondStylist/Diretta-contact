@@ -211,5 +211,49 @@ lauf8() {  # Rundreise: aendern -> zurueckspielen -> vergleichen; Snapshot verae
   ok "L8 Szenario: gezieltes Zurueckspielen stellt nur die gewaehlte Datei her" '[[ "$(cat /etc/zz-t-up/keep.conf)" == keep && "$(cat /etc/zz-t-up/set.conf)" == update-wirkung ]]'
   rm -rf /etc/zz-t-up /etc/zz-t-rt
 }
-for l in ${1:-all}; do case "$l" in all) lauf2; lauf3; lauf4; lauf5; lauf6; lauf7; lauf8;; lauf2) lauf2;; lauf3) lauf3;; lauf4) lauf4;; lauf5) lauf5;; lauf6) lauf6;; lauf7) lauf7;; lauf8) lauf8;; esac; done
+
+lauf9() {  # Laptop-Einrichtung: ssh-Config, Schluessel, sicheres Repo-Update (ohne Netz, mit lokalen Git-Repos)
+  command -v git >/dev/null && command -v ssh-keygen >/dev/null || { echo "SKIP: git oder ssh-keygen fehlt (Lauf 9)"; return; }
+  H="$W/home9"; mkdir -p "$H/.ssh"; printf 'Host alt\n  HostName 192.168.178.66\n  User audiolinux\n' > "$H/.ssh/config"; chmod 644 "$H/.ssh/config"
+  hs() { HOME="$H" bash "$here/laptop-setup.sh" "$@" 2>&1 </dev/null; }
+  o="$(hs --config)"
+  ok "L9 config: Block steht ganz oben (vor dem alten Eintrag), alter Eintrag bleibt erhalten" '[[ "$(grep -n "BEGIN diretta" "$H/.ssh/config" | cut -d: -f1)" == 1 ]] && grep -q "^Host alt" "$H/.ssh/config"'
+  ok "L9 config: Aliase host/target, ProxyJump und feste Adressen" 'grep -q "^Host diretta-host host$" "$H/.ssh/config" && grep -q "^Host diretta-target target$" "$H/.ssh/config" && grep -q "ProxyJump diretta-host" "$H/.ssh/config" && grep -q "HostName 192.168.178.75" "$H/.ssh/config" && grep -q "HostName 172.20.0.2" "$H/.ssh/config"'
+  ok "L9 config: warnt vor der alten Adresse .66" 'grep -q "alte Host-Adresse" <<<"$o"'
+  ok "L9 config: Sicherungskopie der alten Config angelegt" 'ls "$H"/.ssh/config.vor-diretta-*'
+  ok "L9 config: Rechte 600" '[[ "$(stat -c %a "$H/.ssh/config")" == 600 ]]'
+  hs --config >/dev/null
+  ok "L9 config: zweiter Lauf ist idempotent (genau ein Block)" '[[ "$(grep -c "BEGIN diretta" "$H/.ssh/config")" == 1 && "$(grep -c "^Host alt" "$H/.ssh/config")" == 1 ]]'
+  if command -v ssh >/dev/null; then
+    g="$(ssh -F "$H/.ssh/config" -G target 2>/dev/null)"
+    ok "L9 config: ssh loest 'target' zu 172.20.0.2 ueber den Host auf (-G)" 'grep -q "^hostname 172.20.0.2" <<<"$g" && grep -qi "^proxyjump .*diretta-host" <<<"$g" && grep -q "^user audiolinux" <<<"$g"'
+    g="$(ssh -F "$H/.ssh/config" -G host 2>/dev/null)"
+    ok "L9 config: ssh loest 'host' zu 192.168.178.75 auf, trotz altem Eintrag weiter unten" 'grep -q "^hostname 192.168.178.75" <<<"$g"'
+  fi
+  DIRETTA_KEY_PASSPHRASE="" hs --schluessel >/dev/null
+  ok "L9 schluessel: ed25519-Schluessel angelegt, privat 600" '[[ -f "$H/.ssh/id_ed25519_diretta" && -f "$H/.ssh/id_ed25519_diretta.pub" && "$(stat -c %a "$H/.ssh/id_ed25519_diretta")" == 600 ]] && grep -q "^ssh-ed25519 " "$H/.ssh/id_ed25519_diretta.pub"'
+  fp1="$(ssh-keygen -lf "$H/.ssh/id_ed25519_diretta.pub")"; o="$(DIRETTA_KEY_PASSPHRASE="" hs --schluessel)"; r=$?
+  ok "L9 schluessel: vorhandener Schluessel bleibt unveraendert, Skript meldet 'vorhanden' und endet mit Exit 0" '[[ "$fp1" == "$(ssh-keygen -lf "$H/.ssh/id_ed25519_diretta.pub")" && $r -eq 0 ]] && grep -q "vorhanden" <<<"$o"'
+
+  # Repos: lokales "origin", Branch feature, fremde Dateiaenderungen duerfen nie verloren gehen
+  R="$W/remote9"; git init -q --bare "$R"; git clone -q "$R" "$W/seed9" 2>/dev/null
+  ( cd "$W/seed9" && git config user.email t@t && git config user.name t && echo a > f && echo a > g && git add f g && git commit -qm 1 && git branch -M main \
+    && git push -q origin main && git checkout -qb feature && echo b >> f && git commit -qam 2 && git push -q origin feature ) 2>/dev/null
+  export REPO_SPEC="$H/r1|$R|feature"
+  o="$(hs --repos --ja)"
+  ok "L9 repos: fehlendes Repo wird geklont und liegt auf dem Branch" '[[ "$(git -C "$H/r1" rev-parse --abbrev-ref HEAD)" == feature ]]'
+  echo lokal >> "$H/r1/f"; echo neu > "$H/r1/untracked.txt"
+  o="$(hs --repos)"; r=$?
+  ok "L9 repos: ohne Zustimmung (kein Terminal) bleibt alles unberuehrt, Exit 1" '[[ $r -eq 1 && "$(tail -1 "$H/r1/f")" == lokal && -f "$H/r1/untracked.txt" ]]'
+  o="$(hs --repos --ja)"
+  ok "L9 repos: mit Zustimmung -> Stash enthaelt Aenderung UND untracked Datei, Arbeitsbaum sauber" '[[ -z "$(git -C "$H/r1" status --porcelain)" && "$(git -C "$H/r1" stash list | wc -l)" == 1 ]] && git -C "$H/r1" stash show -p --include-untracked stash@{0} | grep -q "untracked.txt"'
+  ok "L9 repos: Stash laesst sich zurueckholen (nichts verloren)" 'git -C "$H/r1" stash pop -q && [[ "$(tail -1 "$H/r1/f")" == lokal && -f "$H/r1/untracked.txt" ]]'
+  git -C "$H/r1" checkout -q -- . ; rm -f "$H/r1/untracked.txt"
+  ( cd "$W/seed9" && echo c >> g && git commit -qam 3 && git push -q origin feature ) 2>/dev/null
+  o="$(hs --repos --ja)"
+  ok "L9 repos: neuer Upstream-Commit wird per ff-only geholt" '[[ "$(git -C "$H/r1" rev-parse HEAD)" == "$(git -C "$R" rev-parse feature)" ]]'
+  unset REPO_SPEC
+  o="$(hs --gibtsnicht)"; r=$?; ok "L9 unbekannte Option: Exit 2" '[[ $r -eq 2 ]]'
+}
+for l in ${1:-all}; do case "$l" in all) lauf2; lauf3; lauf4; lauf5; lauf6; lauf7; lauf8; lauf9;; lauf2) lauf2;; lauf3) lauf3;; lauf4) lauf4;; lauf5) lauf5;; lauf6) lauf6;; lauf7) lauf7;; lauf8) lauf8;; lauf9) lauf9;; esac; done
 echo "bestanden: $pass, fehlgeschlagen: $fail"; (( fail == 0 ))

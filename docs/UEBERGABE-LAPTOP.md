@@ -3,6 +3,8 @@
 Ziel: AudioLinux-Menü- und Kernel-Update auf Diretta Host und Target, mit Snapshot davor und danach und gezieltem Zurückspielen. Ausgangslage und Entscheidungen: `docs/WISSENSSTAND-2026-10-22.md` (maßgeblich), Werkzeuge: `audiolinux-snapshot/`.
 
 ## 1. Einrichtung (einmalig, im Ubuntu-Fenster)
+**Automatisch:** `bash ~/Diretta-contact/audiolinux-snapshot/laptop-setup.sh` erledigt Schlüssel, `~/.ssh/config`, Freischalten auf beiden Pis, Verbindungstest und das sichere Aktualisieren der Repos (lokale Änderungen gehen in einen Stash). Direkt am Terminal starten, nicht über Claude: es fragt nach den Passwörtern der Pis. Die folgenden Schritte zeigen, was es im Einzelnen tut.
+
 ```bash
 git clone https://github.com/BlondStylist/Diretta-contact.git ~/Diretta-contact   # bzw. vorhandenen Klon nutzen
 cd ~/Diretta-contact && git fetch origin && git checkout claude/audiolinux-snapshot-tools && git pull

@@ -50,6 +50,10 @@ M = [
     ("compare-ohne-pacnew-abschnitt", "compare.sh", "pacnew|pacsave", "zzzz", ["lauf7"]),
     ("pflichtwerkzeugpruefung-weg", "snapshot.sh", "(( ${#miss[@]} == 0 )) ||", "true ||", ["lauf4"]),
     ("compare-ohne-diff-pruefung", "compare.sh", "need=(tar gzip diff awk", "need=(tar gzip awk", ["lauf4"]),
+    ("config-block-unten", "laptop-setup.sh", '{ config_block; echo; cat "$alt"; }', '{ cat "$alt"; echo; config_block; }', ["lauf9"]),
+    ("stash-ohne-untracked", "laptop-setup.sh", "stash push -u -m", "stash push -m", ["lauf9"]),
+    ("schluessel-wird-ueberschrieben", "laptop-setup.sh", 'if [ -f "$KEY" ]; then echo "  vorhanden', 'if false; then echo "  vorhanden', ["lauf9"]),
+    ("repo-ohne-rueckfrage-stash", "laptop-setup.sh", '[ "$JA" -eq 1 ] && return 0', "return 0", ["lauf9"]),
     ("check-meldet-fehlende-nicht", "snapshot.sh", "exit $(( fehlt ? 3 : 0 ))", "exit 0", ["lauf4"]),
 ]
 
@@ -82,9 +86,14 @@ def main() -> int:
             p.write_text(neu_text)
             fehler = 0
             for lauf in laeufe:
-                r = subprocess.run(["bash", "tests/run-tests.sh", lauf], cwd=ziel, capture_output=True, text=True,
-                                   env={**os.environ, "SNAPSHOT_TEST": "1"}, timeout=600, check=False)
-                fehler += sum(1 for z in r.stdout.splitlines() if z.startswith("FAIL"))
+                try:   # nie auf Eingaben warten: kein Terminal, Zeitgrenze; ein haengender Test gilt als Fehlschlag
+                    r = subprocess.run(["bash", "tests/run-tests.sh", lauf], cwd=ziel, capture_output=True, text=True,
+                                       stdin=subprocess.DEVNULL, env={**os.environ, "SNAPSHOT_TEST": "1"},
+                                       timeout=300, check=False)
+                    fehler += sum(1 for z in r.stdout.splitlines() if z.startswith("FAIL"))
+                except subprocess.TimeoutExpired:
+                    fehler += 1
+                    print(f"      ({lauf}: Zeitgrenze erreicht, als erkannt gewertet)")
             status = "erkannt" if fehler else "UEBERLEBT"
             print(f"[{i}/{len(wahl)}] {name} ({','.join(laeufe)}): {fehler} Test(s) schlagen an -> {status}", flush=True)
             if not fehler:
