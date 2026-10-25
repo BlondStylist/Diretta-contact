@@ -81,7 +81,9 @@ lauf4() {
   mkdir "$W/minx"; tar -xzf "$W"/min/snapshot-*.tar.gz -C "$W/minx" --strip-components=1
   ok "L4 fehlende Tools stehen im Bericht (nicht still verschluckt)" 'grep -rq "not found" "$W/minx/report/"'
   ok "L4 Konfigurationsdateien trotzdem gesichert" 'tar -xzOf "$W/minx/files.tar.gz" etc/sysctl.d/zz-t-x.conf | grep -q "^a$"'
-  id nobody >/dev/null 2>&1 && { runuser -u nobody -- bash "$here/snapshot.sh" >/dev/null 2>&1; r=$?; ok "L4 ohne Root: Exit 4" '[[ $r -eq 4 ]]'; }
+  # Kopie in ein fuer alle lesbares Verzeichnis: Home-Ordner sind auf Ubuntu 0750, "nobody" kaeme sonst gar nicht an das Skript (Exit 126 statt 4)
+  id nobody >/dev/null 2>&1 && { nb="$(mktemp -d)"; chmod 755 "$nb"; cp "$here/snapshot.sh" "$nb/s.sh"; chmod 755 "$nb/s.sh"
+    runuser -u nobody -- bash "$nb/s.sh" >/dev/null 2>&1; r=$?; rm -rf -- "$nb"; ok "L4 ohne Root: Exit 4" '[[ $r -eq 4 ]]'; }
   if (( $(nproc) >= 2 )) && command -v taskset >/dev/null; then
     OUT_BASE="$W/aff" SAMPLE=3 bash "$here/snapshot.sh" aff >/dev/null 2>&1 & pid=$!; sleep 1
     ok "L4 Skript laeuft nur auf Kern 0-1 (Audiokerne 2-3 unberuehrt)" '[[ "$(awk "/Cpus_allowed_list/{print \$2}" /proc/$pid/status)" == 0-1 ]]'
@@ -315,10 +317,10 @@ lauf10() {  # Original-Image einlesen: gleiches Archivformat wie snapshot.sh, Ve
   o="$(SUCHPFADE="$W/i10/dl" MIN_KB=999999 bash "$here/image-snapshot.sh" --suche 2>&1)"; r=$?
   ok "L10 --suche ohne Treffer: Exit 1 und Hinweis" '[[ $r -eq 1 ]] && grep -q "Keine Images" <<<"$o"'
   # Echtes Image (Loop-Mount, nur lesend): braucht sfdisk, mkfs.ext4, mkfs.vfat, losetup
-  local c fehlt=0; for c in sfdisk mkfs.ext4 mkfs.vfat losetup unshare truncate dd; do command -v "$c" >/dev/null 2>&1 || fehlt=1; done
+  local c fehlt=0; for c in sfdisk mkfs.ext4 losetup unshare truncate dd; do command -v "$c" >/dev/null 2>&1 || fehlt=1; done
   if (( fehlt )); then echo "    (L10 Image-Test uebersprungen: Werkzeug fehlt)"; return 0; fi
   local IMG="$W/i10/test.img" P1="$W/i10/p1" P2="$W/i10/p2"
-  truncate -s 40M "$P1"; mkfs.vfat -q "$P1" >/dev/null 2>&1; truncate -s 100M "$P2"; mkfs.ext4 -q -d "$R" "$P2" >/dev/null 2>&1
+  truncate -s 40M "$P1"; command -v mkfs.vfat >/dev/null 2>&1 && mkfs.vfat -q "$P1" >/dev/null 2>&1; truncate -s 100M "$P2"; mkfs.ext4 -q -d "$R" "$P2" >/dev/null 2>&1
   truncate -s $(( (2048 + 81920 + 204800) * 512 )) "$IMG"
   printf 'label: dos\nunit: sectors\n\nstart=2048, size=81920, type=c\nstart=83968, size=204800, type=83\n' | sfdisk -q "$IMG" >/dev/null 2>&1
   dd if="$P1" of="$IMG" bs=512 seek=2048 conv=notrunc status=none; dd if="$P2" of="$IMG" bs=512 seek=83968 conv=notrunc status=none

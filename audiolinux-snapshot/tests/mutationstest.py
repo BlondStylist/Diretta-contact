@@ -73,7 +73,7 @@ def main() -> int:
         print("uebersprungen: braucht root und SNAPSHOT_TEST=1 (Wegwerfumgebung)")
         return 77
     wahl = [m for m in M if (not a.lauf or a.lauf in m[4]) and (not a.nur or a.nur == m[0])]
-    ueberlebt, unanwendbar = [], []
+    ueberlebt, unanwendbar, unbeurteilt = [], [], []
     with tempfile.TemporaryDirectory(prefix="mutanten-") as tmp:
         for i, (name, datei, alt, neu, laeufe) in enumerate(wahl, 1):
             ziel = Path(tmp) / f"m{i}"
@@ -91,20 +91,27 @@ def main() -> int:
                 continue
             p.write_text(neu_text)
             fehler = 0
+            uebersprungen = False
             for lauf in laeufe:
                 try:   # nie auf Eingaben warten: kein Terminal, Zeitgrenze; ein haengender Test gilt als Fehlschlag
                     r = subprocess.run(["bash", "tests/run-tests.sh", lauf], cwd=ziel, capture_output=True, text=True,
                                        stdin=subprocess.DEVNULL, env={**os.environ, "SNAPSHOT_TEST": "1"},
                                        timeout=300, check=False)
                     fehler += sum(1 for z in r.stdout.splitlines() if z.startswith("FAIL"))
+                    uebersprungen = uebersprungen or "uebersprungen" in r.stdout
                 except subprocess.TimeoutExpired:
                     fehler += 1
                     print(f"      ({lauf}: Zeitgrenze erreicht, als erkannt gewertet)")
-            status = "erkannt" if fehler else "UEBERLEBT"
+            # Ueberlebt, weil die zustaendigen Pruefungen auf diesem Rechner uebersprungen wurden (z. B. Loop-Mount
+            # nicht moeglich): nicht beurteilbar, aber keine Testluecke. Wird getrennt ausgewiesen.
+            status = "erkannt" if fehler else ("UNBEURTEILT (Pruefung uebersprungen)" if uebersprungen else "UEBERLEBT")
             print(f"[{i}/{len(wahl)}] {name} ({','.join(laeufe)}): {fehler} Test(s) schlagen an -> {status}", flush=True)
             if not fehler:
-                ueberlebt.append(name)
-    print(f"\n{len(wahl) - len(ueberlebt) - len(unanwendbar)} erkannt, {len(ueberlebt)} ueberlebt, {len(unanwendbar)} nicht anwendbar")
+                (unbeurteilt if uebersprungen else ueberlebt).append(name)
+    print(f"\n{len(wahl) - len(ueberlebt) - len(unanwendbar) - len(unbeurteilt)} erkannt, {len(ueberlebt)} ueberlebt, "
+          f"{len(unanwendbar)} nicht anwendbar, {len(unbeurteilt)} unbeurteilt")
+    if unbeurteilt:
+        print("unbeurteilt (Pruefung auf diesem Rechner uebersprungen, in der CI laeuft sie):", ", ".join(unbeurteilt))
     if unanwendbar:
         print("nicht anwendbar:", ", ".join(unanwendbar))
         return 2
