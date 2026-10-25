@@ -1,0 +1,24 @@
+name: audiolinux-snapshot
+
+on:
+  push:
+    paths: ['audiolinux-snapshot/**', '.github/workflows/audiolinux-snapshot.yml']
+  pull_request:
+    paths: ['audiolinux-snapshot/**', '.github/workflows/audiolinux-snapshot.yml']
+
+jobs:
+  shell-tests:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest        # AudioLinux basiert auf Arch: gleiche Coreutils/util-linux/tar/awk
+      options: --privileged          # erlaubt den tmpfs-Mount fuer den Platz-Test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Werkzeuge installieren
+        run: pacman -Syu --noconfirm --needed shellcheck python procps-ng iproute2 ethtool diffutils git openssh util-linux e2fsprogs dosfstools
+      - name: shellcheck
+        run: shellcheck -x -S warning audiolinux-snapshot/*.sh audiolinux-snapshot/tests/run-tests.sh
+      - name: Tests (Laeufe 2-8)
+        env:
+          SNAPSHOT_TEST: "1"
+        run: bash audiolinux-snapshot/tests/run-tests.sh all
