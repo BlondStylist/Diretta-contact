@@ -101,6 +101,10 @@ lauf4() {
   mkdir "$W/nodiff"; for c in bash sh tar gzip sort awk mktemp grep realpath id; do p="$(command -v "$c")" && ln -s "$p" "$W/nodiff/$c"; done
   snap nd >/dev/null; PATH="$W/nodiff" bash "$here/compare.sh" "$(newest nd)" "$(newest nd)" >/dev/null 2>&1; r1=$?; PATH="$W/nodiff" bash "$here/restore.sh" "$(newest nd)" /etc/hostname >/dev/null 2>&1; r2=$?
   ok "L4 ohne diff: compare und restore melden das (Exit 3), statt still falsch zu laufen" '[[ $r1 -eq 3 && $r2 -eq 3 ]]'
+  o="$(OUT_BASE="$W/chk" bash "$here/snapshot.sh" --check 2>&1)"; r=$?
+  ok "L4 --check: Exit 0, listet Pflicht-/optionale Werkzeuge und Pfade, legt nichts an" '[[ $r -eq 0 ]] && grep -q "Pflicht-Werkzeuge" <<<"$o" && grep -q "Optionale Werkzeuge" <<<"$o" && grep -q "^Pfade:" <<<"$o" && [[ ! -e "$W/chk" ]]'
+  o="$(PATH="$W/nocut" bash "$here/snapshot.sh" --check 2>&1)"; r=$?
+  ok "L4 --check: fehlendes Pflicht-Werkzeug (cut) -> Exit 3 und FEHLT-Zeile" '[[ $r -eq 3 ]] && grep -q "FEHLT   cut" <<<"$o"'
   bash "$here/compare.sh" /nicht/da.tar.gz /auch/nicht.tar.gz >/dev/null 2>&1; r=$?; ok "L4 compare: fehlende Datei -> Exit 2" '[[ $r -eq 2 ]]'
   A="$(newest clean2)"; bash "$here/compare.sh" "$A" "$A" >/dev/null 2>&1; ok "L4 compare: identisch -> Exit 0" '[[ $? -eq 0 ]]'
   echo changed >> /etc/sysctl.d/zz-t-x.conf; snap c3 >/dev/null; bash "$here/compare.sh" "$A" "$(newest c3)" >/dev/null 2>&1; r=$?; ok "L4 compare: Unterschied -> Exit 1" '[[ $r -eq 1 ]]'

@@ -4,6 +4,7 @@ Nur lesend (außer der Ausgabe). Läuft auf Kern 0-1 mit niedriger Priorität, d
 Ausgabe: `/root/config-archiv/snapshot-<host>-<label>-<zeit>.tar.gz` (0600) und Kopie in `/home/audiolinux/snapshots/`.
 
 ```bash
+bash snapshot.sh --check               # Vorabcheck in Sekunden: Werkzeuge und Pfade vorhanden? (ohne Root, schreibt nichts)
 sudo bash snapshot.sh pre-update          # vor dem Update, auf Host UND Target, ohne Wiedergabe
 sudo bash snapshot.sh post-update         # nach Update + Reboot + Diretta-Neuinstallation
 bash compare.sh vorher.tar.gz nachher.tar.gz            # Exit 0 identisch, 1 Unterschiede, 2 Fehler

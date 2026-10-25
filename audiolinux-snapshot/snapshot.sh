@@ -1,12 +1,28 @@
 #!/usr/bin/env bash
 # Sichert Konfiguration + Zustand eines AudioLinux-Geraets (Diretta Host oder Target) fuer den Vorher/Nachher-Vergleich.
 # Nur lesend ausser der Ausgabe. Kein shadow, keine privaten SSH-/Host-Schluessel.
-# Usage: sudo bash snapshot.sh [label]        Env: OUT_BASE=/root/config-archiv  SAMPLE=10 (Sekunden IRQ-Delta, 0=aus)
+# Usage: sudo bash snapshot.sh [label]        bash snapshot.sh --check   (Vorabcheck, kein Root noetig, schreibt nichts)        Env: OUT_BASE=/root/config-archiv  SAMPLE=10 (Sekunden IRQ-Delta, 0=aus)
 # Exit: 0 ok | 3 Pflicht-Werkzeug fehlt | 4 kein Root | 5 Archiv unvollstaendig | 7 zu wenig Platz | 130 abgebrochen
 # shellcheck disable=SC2016  # Befehle gehen bewusst als String an bash -c
 set -uo pipefail
-[[ $EUID -eq 0 ]] || { echo "Als root starten: sudo bash $0 [label]" >&2; exit 4; }
 need=(tar gzip find xargs sha256sum sort awk df mktemp grep sed cut wc du head tail readlink date uname)
+if [[ ${1:-} == --check ]]; then      # schneller Vorabcheck ohne Root und ohne Ausgabe-Dateien
+  echo "Pflicht-Werkzeuge (fehlt eines: Exit 3):"; fehlt=0
+  for c in "${need[@]}"; do if command -v "$c" >/dev/null 2>&1; then echo "  ok      $c"; else echo "  FEHLT   $c"; fehlt=1; fi; done
+  echo "Optionale Werkzeuge (fehlend = Befehl im Bericht mit Fehler, kein Abbruch):"
+  for c in pacman systemctl journalctl ethtool tc ip nft networkctl vcgencmd rpi-eeprom-update dkms sysctl lsmod modinfo lsblk lsusb aplay findmnt \
+           pgrep ps chrt taskset renice ionice setpriv runuser getent crontab loginctl systemd-delta; do
+    if command -v "$c" >/dev/null 2>&1; then echo "  ok      $c"; else echo "  fehlt   $c"; fi
+  done
+  echo "Pfade:"
+  for p in /etc /opt/scripts /opt/configuration /opt/diretta-alsa /opt/diretta-alsa-target /boot/cmdline.txt /boot/firmware/cmdline.txt /home/audiolinux; do
+    if [[ -e $p ]]; then echo "  da      $p"; else echo "  fehlt   $p"; fi
+  done
+  echo "Root: $([[ $EUID -eq 0 ]] && echo ja || echo nein, 'fuer den Lauf: sudo bash snapshot.sh')"
+  echo "Platz in ${OUT_BASE:-/root/config-archiv}: $(df -Pk "$(dirname "${OUT_BASE:-/root/config-archiv}")" 2>/dev/null | awk 'NR==2{printf "%d MB frei", $4/1024}')"
+  exit $(( fehlt ? 3 : 0 ))
+fi
+[[ $EUID -eq 0 ]] || { echo "Als root starten: sudo bash $0 [label]" >&2; exit 4; }
 miss=(); for c in "${need[@]}"; do command -v "$c" >/dev/null 2>&1 || miss+=("$c"); done
 (( ${#miss[@]} == 0 )) || { echo "Fehlende Pflicht-Werkzeuge: ${miss[*]} (Arch: pacman -S coreutils findutils gawk tar gzip grep sed diffutils)" >&2; exit 3; }
 export LC_ALL=C LANG=C                       # stabile Ausgabe: keine Sprachunterschiede im Vergleich

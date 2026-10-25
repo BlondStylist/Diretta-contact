@@ -50,6 +50,7 @@ M = [
     ("compare-ohne-pacnew-abschnitt", "compare.sh", "pacnew|pacsave", "zzzz", ["lauf7"]),
     ("pflichtwerkzeugpruefung-weg", "snapshot.sh", "(( ${#miss[@]} == 0 )) ||", "true ||", ["lauf4"]),
     ("compare-ohne-diff-pruefung", "compare.sh", "need=(tar gzip diff awk", "need=(tar gzip awk", ["lauf4"]),
+    ("check-meldet-fehlende-nicht", "snapshot.sh", "exit $(( fehlt ? 3 : 0 ))", "exit 0", ["lauf4"]),
 ]
 
 
